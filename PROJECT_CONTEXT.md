@@ -36,8 +36,9 @@
 
 ## 5. 仓库与协作
 
-- 仓库：`course-cards`（GitHub，空仓库起步，不含 README / .gitignore）。
-- 分支：`main` 受保护；日常开发走 feature 分支 + PR。
+- 仓库：`course-cards` → https://github.com/lzj0122/course-cards （**public**，空仓库起步，不含 README / .gitignore）。
+- Owner：`lzj0122`；搭档：`wgy0523`（collaborator，push 权限）。
+- 分支：`main` 受保护（PR + 1 approval 才能合并，禁 force push，规则对管理员同样生效）；日常开发走 feature 分支 + PR。
 - 分工（第一步）：
   - 我：环境与仓库、Sites 能力验证、3 份示例课件。
   - 搭档：课件类型鉴定与 PDF 管线建议、DESIGN.md 草案（颜色/字号/间距/圆角/组件状态）、选一份含 12–18 考点的课件作演示素材。
@@ -60,6 +61,8 @@
 - [x] 本地仓库 `course-cards` 已建（main，空仓库起步，无 README/.gitignore），PROJECT_CONTEXT.md 与 samples 已提交（2 commits）。
 - [x] Sites Function + Secret 支持已验证 → 方案 a。
 - [x] 3 份示例课件已生成并验证：截图 1600×900；文字版 4 页、文本层可提取全部 16 考点关键词；扫描版 4 页、0 文本字符。
-- [ ] GitHub 远程仓库创建、推送、邀请搭档、保护 main（gh 设备授权进行中；待搭档 GitHub 用户名；仓库可见性默认 private 待确认）。
+- [x] GitHub 账号 `lzj0122` 已注册（邮箱验证由用户完成）；gh CLI 已登录（keyring，scopes: repo/gist/read:org）。
+- [x] 远程 public 空仓库已建并推送；`main` 分支保护与搭档邀请见下条验证结果。
+- [x] 网络方案：本机 github.com TCP 间歇被断；gh/git 走 Clash Verge 混合端口 `HTTPS_PROXY=http://127.0.0.1:7897`；浏览器走 QUIC 直连可用。
 - [ ] 搭档：DESIGN.md 草案、课件鉴定结论、演示素材选定。
-- 环境备注：本机到 github.com 的直连下载不稳定（winget 曾停滞后续完成）；git 全局身份未配置，暂用提交级临时身份 `Course Cards Dev <dev@course-cards.local>`，两位开发者 clone 后请自行配置。
+- 环境备注：git 全局身份未配置，暂用提交级临时身份 `Course Cards Dev <dev@course-cards.local>`，两位开发者 clone 后请自行配置。
