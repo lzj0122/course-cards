@@ -1,0 +1,9 @@
+{
+  "name": "course-cards-tools",
+  "private": true,
+  "type": "module",
+  "description": "课件鉴定探针：pdfjs-dist 文本层/图像指令统计。运行：npm i && node pdf-probe.mjs",
+  "dependencies": {
+    "pdfjs-dist": "4.8.69"
+  }
+}
