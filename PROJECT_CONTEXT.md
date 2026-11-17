@@ -56,9 +56,10 @@
 
 ## 7. 当前状态（2026-11-16）
 
-- [x] Git 已安装（2.56.0.windows.4）。
-- [x] 本地仓库 `course-cards` 已建（main，空仓库，无 README/.gitignore）。
+- [x] Git 已安装（2.56.0.windows.4）；gh CLI 2.104.0 已安装（winget）。
+- [x] 本地仓库 `course-cards` 已建（main，空仓库起步，无 README/.gitignore），PROJECT_CONTEXT.md 与 samples 已提交（2 commits）。
 - [x] Sites Function + Secret 支持已验证 → 方案 a。
-- [x] 3 份示例课件已生成并验证（截图 / 文字版 / 扫描版）。
-- [ ] GitHub 远程仓库创建、邀请搭档、保护 main（待 gh 登录与搭档 GitHub 用户名）。
+- [x] 3 份示例课件已生成并验证：截图 1600×900；文字版 4 页、文本层可提取全部 16 考点关键词；扫描版 4 页、0 文本字符。
+- [ ] GitHub 远程仓库创建、推送、邀请搭档、保护 main（gh 设备授权进行中；待搭档 GitHub 用户名；仓库可见性默认 private 待确认）。
 - [ ] 搭档：DESIGN.md 草案、课件鉴定结论、演示素材选定。
+- 环境备注：本机到 github.com 的直连下载不稳定（winget 曾停滞后续完成）；git 全局身份未配置，暂用提交级临时身份 `Course Cards Dev <dev@course-cards.local>`，两位开发者 clone 后请自行配置。
