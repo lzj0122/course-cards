@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>计算机网络 · 传输层 TCP 复习讲义</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "SimSun", serif; color: #1a1a1a; font-size: 11.5pt; line-height: 1.62; }
+  .head { border-bottom: 2.5px solid #14386e; padding-bottom: 8px; margin-bottom: 14px; }
+  .head .school { font-size: 10pt; color: #555; letter-spacing: 1px; }
+  h1 { font-size: 17pt; color: #14386e; margin-top: 3px; }
+  .meta { font-size: 9.5pt; color: #666; margin-top: 4px; }
+  h2 { font-size: 13pt; color: #14386e; margin: 14px 0 8px; padding-left: 9px; border-left: 4px solid #c9a227; }
+  .point { margin-bottom: 9px; page-break-inside: avoid; }
+  .point .t { font-weight: bold; }
+  .point .t .no { color: #b03030; margin-right: 5px; }
+  .point p { text-align: justify; }
+  .kw { font-weight: bold; color: #14386e; }
+  table { border-collapse: collapse; width: 100%; margin: 6px 0 10px; font-size: 10.5pt; }
+  th, td { border: 1px solid #999; padding: 4px 8px; text-align: left; }
+  th { background: #e8eef7; color: #14386e; }
+  .note { background: #fdf6e3; border: 1px solid #d9c58a; border-radius: 4px; padding: 7px 10px; font-size: 10.5pt; margin: 8px 0; page-break-inside: avoid; }
+  .pagebreak { page-break-before: always; }
+  .foot { margin-top: 16px; border-top: 1px solid #bbb; padding-top: 6px; font-size: 9pt; color: #777; display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+  <div class="head">
+    <div class="school">计算机科学与技术学院 ·《计算机网络》期末复习讲义</div>
+    <h1>第 5 章 传输层 · TCP 核心机制 16 考点</h1>
+    <div class="meta">适用范围：闭卷考试第 3、4 大题（简答 + 综合分析） · 配套课件第 3 讲（Page 12–19）</div>
+  </div>
+
+  <h2>一、连接与报文基础</h2>
+  <div class="point"><p class="t"><span class="no">01</span>TCP 与 UDP 的区别</p>
+  <p>TCP 面向连接、提供可靠交付、面向字节流、支持全双工通信，首部最小 20 字节；UDP 无连接、尽最大努力交付（不可靠）、面向数据报、支持一对一/一对多/多对多通信，首部固定 8 字节。TCP 适用于文件传输、网页浏览等要求可靠的场景；UDP 适用于视频直播、DNS 查询、在线游戏等实时性优先的场景。</p></div>
+  <div class="point"><p class="t"><span class="no">02</span>TCP / UDP 首部长度</p>
+  <p>TCP 首部固定部分 <span class="kw">20 字节</span>，含选项时最长 60 字节（数据偏移字段以 4 字节为单位，最大 15）；UDP 首部固定 <span class="kw">8 字节</span>：源端口、目的端口、长度、校验和各 2 字节。</p></div>
+  <div class="point"><p class="t"><span class="no">03</span>三次握手的过程与原因</p>
+  <p>过程：① 客户端发送 SYN=1、seq=x；② 服务端回复 SYN=1、ACK=1、seq=y、ack=x+1；③ 客户端发送 ACK=1、seq=x+1、ack=y+1。原因：同步双方初始序号 ISN 并确认双方收发能力；若只有两次握手，已失效的连接请求报文突然到达服务端时会错误建立连接，造成资源浪费。</p></div>
+  <div class="point"><p class="t"><span class="no">04</span>四次挥手的过程与原因</p>
+  <p>过程：① 主动方发 FIN=1、seq=u；② 被动方回 ACK、ack=u+1（此时主动方→被动方方向关闭，连接处于半关闭状态）；③ 被动方数据发完后发 FIN=1、seq=w；④ 主动方回 ACK、ack=w+1，进入 TIME_WAIT。原因：TCP 全双工，两个方向必须各自独立关闭；被动方的 ACK 与 FIN 通常不能合并（中间可能还有数据要发送），因此是四次而非三次。</p></div>
+  <div class="point"><p class="t"><span class="no">05</span>TIME_WAIT 与 2MSL</p>
+  <p>主动关闭方在发出最后一个 ACK 后进入 TIME_WAIT，持续 <span class="kw">2MSL</span>（最长报文段寿命的两倍，Linux 常见 60 秒）。作用：① 若最后一个 ACK 丢失，被动方会重传 FIN，TIME_WAIT 保证能重发 ACK，使连接正常关闭；② 让本连接产生的所有旧报文在网络中消散，避免污染相同四元组的新连接。</p></div>
+  <div class="point"><p class="t"><span class="no">06</span>序号与确认号</p>
+  <p>TCP 把数据看作字节流，序号 seq 是本报文段第一个数据字节的编号；确认号 ack 表示<span class="kw">期望收到对方下一个报文段的第一个数据字节序号</span>，即 ack=N 表示 N−1 为止的字节已全部正确收到。ACK 标志位为 1 时确认号字段才有效，连接建立后所有报文 ACK 均置 1。</p></div>
+
+  <h2>二、窗口与流量控制</h2>
+  <div class="point"><p class="t"><span class="no">07</span>滑动窗口与流量控制</p>
+  <p>接收方在 ACK 报文中通告接收窗口 <span class="kw">rwnd</span>，发送方的发送窗口不得超过 rwnd，从而让发送速率与接收方处理能力匹配。窗口为 0 时发送方停止发送数据，并启动持续计时器，定期发送窗口探测报文防止死锁。流量控制是端到端机制，抑制的是发送方。</p></div>
+  <div class="point"><p class="t"><span class="no">08</span>流量控制与拥塞控制的区别</p>
+  <p>流量控制防止<span class="kw">接收方</span>来不及接收（端到端，依据 rwnd）；拥塞控制防止过多数据注入<span class="kw">网络</span>导致路由器/链路过载（全局性，依据拥塞窗口 cwnd）。实际发送窗口 = min(rwnd, cwnd)。</p></div>
+
+  <div class="pagebreak"></div>
+  <h2>三、拥塞控制四算法</h2>
+  <div class="point"><p class="t"><span class="no">09</span>慢启动（Slow Start）</p>
+  <p>连接开始时 cwnd=1 MSS，每收到一个对新报文段的确认 cwnd 加 1 MSS，效果是<span class="kw">每经过一个 RTT，cwnd 翻倍（指数增长）</span>。当 cwnd 达到慢启动门限 ssthresh 时转入拥塞避免。"慢"是相对一开始就注入大量数据而言，并非增长慢。</p></div>
+  <div class="point"><p class="t"><span class="no">10</span>拥塞避免（Congestion Avoidance）</p>
+  <p>cwnd ≥ ssthresh 后进入拥塞避免：<span class="kw">加性增</span>，每经过一个 RTT，cwnd 增加 1 MSS（线性增长），使网络缓慢逼近拥塞。一旦出现超时：ssthresh 设为当前 cwnd 的一半，cwnd 重置为 1 MSS，重新执行慢启动。</p></div>
+  <div class="point"><p class="t"><span class="no">11</span>快重传（Fast Retransmit）</p>
+  <p>接收方每收到一个失序报文段就立即发送对最后一个按序到达字节的<span class="kw">重复确认</span>；发送方一连收到 <span class="kw">3 个重复 ACK</span> 就立即重传对方尚未收到的报文段，而不必等待重传计时器超时，可显著降低恢复时延。</p></div>
+  <div class="point"><p class="t"><span class="no">12</span>快恢复（Fast Recovery）</p>
+  <p>与快重传配合：收到 3 个重复 ACK 时，ssthresh 与 cwnd 均设为当前 cwnd 的一半（<span class="kw">乘性减</span>），然后直接执行拥塞避免（加性增），而不回到慢启动。理由：能收到重复 ACK 说明网络仍有一定交付能力，只是个别报文丢失。注意区分：超时 → 慢启动重来；3 个重复 ACK → 快恢复。</p></div>
+  <table>
+    <tr><th>事件</th><th>ssthresh</th><th>cwnd</th><th>进入阶段</th></tr>
+    <tr><td>超时（RTO 到期）</td><td>cwnd / 2</td><td>1 MSS</td><td>慢启动</td></tr>
+    <tr><td>3 个重复 ACK</td><td>cwnd / 2</td><td>cwnd / 2</td><td>拥塞避免（快恢复）</td></tr>
+  </table>
+  <div class="point"><p class="t"><span class="no">13</span>重传计时器与 RTO</p>
+  <p>发送方为每个已发送未确认的报文段维护重传计时器，超时时间 RTO 基于往返时间 RTT 的加权平均（SRTT）与偏差（RTTVAR）动态估算：RTO = SRTT + 4×RTTVAR。RTO 过小导致不必要重传，过大导致空闲等待。重传报文不用于更新 RTT 样本（Karn 算法），并对 RTO 做指数退避。</p></div>
+
+  <h2>四、工程与应用</h2>
+  <div class="point"><p class="t"><span class="no">14</span>TCP 粘包 / 拆包</p>
+  <p>成因：TCP 面向字节流、<span class="kw">不保留应用层报文边界</span>；发送方 Nagle 算法合并小包、接收方缓冲区读取不及时都会造成多个应用报文粘连（粘包）或一个报文被拆分读取（拆包）。UDP 面向数据报，天然有边界，不存在粘包。解决方案：① 定长消息；② 特殊分隔符（如 HTTP 的 \r\n\r\n）；③ 消息头携带长度字段（最常用，如 Length + Body 协议）。</p></div>
+  <div class="point"><p class="t"><span class="no">15</span>常见应用层端口号</p>
+  <p>FTP 21（控制）/ 20（数据）、SSH 22、Telnet 23、SMTP 25、DNS 53（查询用 UDP，区域传送用 TCP）、HTTP 80、HTTPS 443。端口号 16 位：0–1023 熟知端口，1024–49151 登记端口，49152–65535 客户端临时端口。</p></div>
+  <div class="point"><p class="t"><span class="no">16</span>TCP 可靠传输机制小结</p>
+  <p>TCP 的可靠性由一组机制共同保证：<span class="kw">校验和</span>（丢弃损坏报文）、<span class="kw">序号与确认</span>（去重、按序交付）、<span class="kw">重传</span>（超时重传 + 快重传）、<span class="kw">滑动窗口</span>（流量控制）、<span class="kw">拥塞控制</span>（慢启动/拥塞避免/快重传/快恢复）。答题时按"检错—排序—补漏—限速—防堵"五个层次展开。</p></div>
+
+  <div class="note"><b>复习提示：</b>本讲义 16 个考点与课件第 3 讲截图（Page 12）一一对应。考试高频：三次握手为什么不是两次（考点 03）、TIME_WAIT 的作用（考点 05）、超时与 3 个重复 ACK 的窗口变化对比表（考点 09–12）。</div>
+  <div class="foot"><span>《计算机网络》复习讲义 · 传输层</span><span>共 16 考点 · 2026 秋季学期</span></div>
+</body>
+</html>

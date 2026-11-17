@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>计算机网络 · 传输层 TCP</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1600px; height: 900px; overflow: hidden; }
+  body {
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+    background: linear-gradient(135deg, #0f2a52 0%, #14386e 55%, #1b4a8f 100%);
+    color: #f2f6fc; position: relative;
+  }
+  .topbar { display: flex; justify-content: space-between; align-items: center; padding: 34px 64px 0; }
+  .school { font-size: 24px; letter-spacing: 2px; color: #bcd2f0; }
+  .course { font-size: 22px; color: #8fb3e4; }
+  h1 { font-size: 58px; padding: 26px 64px 6px; font-weight: 700; }
+  h1 .chap { color: #ffd166; font-size: 34px; display: block; margin-bottom: 10px; font-weight: 600; letter-spacing: 3px; }
+  .rule { width: 1472px; height: 4px; margin: 18px 64px 30px; background: linear-gradient(90deg, #ffd166, #4cc9f0 60%, transparent); border-radius: 2px; }
+  .cols { display: flex; gap: 44px; padding: 0 64px; }
+  .col { flex: 1; background: rgba(255,255,255,0.06); border: 1px solid rgba(140,180,240,0.28); border-radius: 18px; padding: 30px 34px; }
+  .col h2 { font-size: 30px; color: #4cc9f0; margin-bottom: 20px; }
+  .col h2.warm { color: #ffd166; }
+  li { list-style: none; font-size: 25px; line-height: 1.5; margin-bottom: 17px; padding-left: 30px; position: relative; }
+  li::before { content: "▪"; position: absolute; left: 4px; color: #ffd166; }
+  li b { color: #ffe3a3; }
+  .kw { color: #7ee0ff; font-weight: 600; }
+  .footer { position: absolute; bottom: 26px; left: 64px; right: 64px; display: flex; justify-content: space-between; font-size: 20px; color: #7d9cc9; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <span class="school">计算机科学与技术学院</span>
+    <span class="course">《计算机网络》 · 第 5 章 传输层 · 第 3 讲</span>
+  </div>
+  <h1><span class="chap">TRANSPORT LAYER</span>TCP 核心机制：可靠传输是如何炼成的</h1>
+  <div class="rule"></div>
+  <div class="cols">
+    <div class="col">
+      <h2>连接与报文</h2>
+      <ul>
+        <li><b>TCP vs UDP</b>：面向连接、可靠字节流 vs 无连接、不可靠数据报</li>
+        <li>首部开销：TCP 最小 <span class="kw">20 字节</span>，UDP 固定 <span class="kw">8 字节</span></li>
+        <li><b>三次握手</b>：SYN → SYN+ACK → ACK，同步双方初始序号 ISN</li>
+        <li><b>四次挥手</b>：FIN/ACK 各两次，全双工两个方向独立关闭</li>
+        <li><span class="kw">TIME_WAIT</span> 等待 2MSL：保证末个 ACK 可达、旧报文消散</li>
+        <li>序号按字节编号；确认号 = 期望收到的下一个字节</li>
+      </ul>
+    </div>
+    <div class="col">
+      <h2 class="warm">窗口与拥塞控制</h2>
+      <ul>
+        <li><b>滑动窗口</b>实现流量控制，接收方通告 rwnd</li>
+        <li>流量控制防<span class="kw">接收方</span>过载；拥塞控制防<span class="kw">网络</span>过载</li>
+        <li><b>慢启动</b>：cwnd 指数增长至 ssthresh</li>
+        <li><b>拥塞避免</b>：加性增，每 RTT 增 1 MSS</li>
+        <li><b>快重传</b>：收到 3 个重复 ACK 立即重传</li>
+        <li><b>快恢复</b>：乘性减，cwnd 减半后进入拥塞避免</li>
+        <li>粘包成因：字节流无边界；解法：定长 / 分隔符 / 长度字段</li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer">
+    <span>重点：握手挥手状态机 · 四种拥塞控制算法的触发条件与窗口变化</span>
+    <span>Page 12 / 48</span>
+  </div>
+</body>
+</html>
