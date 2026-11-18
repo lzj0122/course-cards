@@ -15,3 +15,5 @@
 | D011 | 11-18 | 搭档 push 凭据为 30 天 PAT（repo scope，12-18 过期），存 Windows 凭据管理器 | 比赛结束后手动吊销（GitHub → Settings → Developer settings → Tokens classic） |
 | D012 | 11-18 | 纯静态 HTML/CSS/ES Modules，无构建；pdfjs-dist vendor 本地化（不用 CDN） | 部署体积/离线演示敏感；Sites 静态输出最简路径 |
 | D013 | 11-18 | M1 并行边界：B 不改 js/api.js、js/storage.js、data/mock-points.js；fixture 唯一来源 mock-points.js | 用户第二步指令；防共享文件冲突 |
+| D014 | 11-18 | index.html 所有权第三步起归 B（A 不碰）；大字持久化由 B 经 storage.js loadPrefs/savePrefs 接通 | 用户第三步指令与时序确认；纯文档留痕，DOM id 表与字段零改动（PR #2 备注 2/3） |
+| D015 | 11-18 | 契约 v1.1：Point 可选 `page?: number`（≥1 整数）；mock 页码 p01–p07→1、p08→2、p09–p12→3；分组有 page 升序／无 page 扁平／混合未标注页置末 | PR #2 评审异议 1、用户已确认；加性可选字段故 schemaVersion=1 与 key .v1 不变、旧数据兼容；B 兼容式分组零改动 |

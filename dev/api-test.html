@@ -70,6 +70,11 @@ await check('mock 每条 question 1–200 / answer 1–2000 字符', async () =>
     assert(p.answer.trim().length >= 1 && p.answer.length <= 2000, `${p.id} answer`);
   }
 });
+await check('v1.1 页码 p01–p07→1、p08→2、p09–p12→3', async () => {
+  const { deck } = await extractPoints(png());
+  assert(deck.points.map(p => p.page).join() === '1,1,1,1,1,1,1,2,3,3,3,3', 'page 映射');
+  assert(deck.points.every(p => Number.isInteger(p.page) && p.page >= 1), 'page ≥1 整数');
+});
 await check('extractPoints(pdf) 类型放行，M1 同样返回 mock', async () => {
   const { deck } = await extractPoints(new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' }));
   assert(deck.points.length === 12);

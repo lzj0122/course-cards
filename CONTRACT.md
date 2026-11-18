@@ -1,7 +1,7 @@
-# CONTRACT.md — M1 接口契约 v1.0
+# CONTRACT.md — M1 接口契约 v1.1
 
-> 状态：待搭档评审（feat/m1-api-A PR）。**字段歧义先提异议、双方确认后才改**，变更记录进 DECISIONS.md。
-> 并行分工：A = `feat/m1-api-A`（js/api.js、js/storage.js、data/mock-points.js、index.html 骨架）；B = `feat/m1-list-B`（js/list.js、上传区与清单 UI、样式）。B **不得修改** js/api.js / js/storage.js / data/mock-points.js。
+> 状态：v1.1 增补待搭档复审（PR #2）。**字段歧义先提异议、双方确认后才改**，变更记录进 DECISIONS.md。
+> 并行分工：A = `feat/m1-api-A`（js/api.js、js/storage.js、data/mock-points.js、tools/contract-check.mjs、dev/api-test.html）；B = `feat/m1-list-B`（index.html、js/list.js、css/list.css、上传区与清单 UI、样式、大字持久化）。B **不得修改** js/api.js / js/storage.js / data/mock-points.js。
 > 技术形态：纯静态 HTML + CSS + ES Modules，无构建步骤；pdf.js 以 vendor 本地文件引入（D012）。
 
 ## 1. 数据 schema：studyDeck 与 studyDeck.points
@@ -11,6 +11,7 @@ type Point = {
   id: string;        // 非空、deck 内唯一；格式 "p" + 两位序号（p01…p99）；生成后稳定不变，是 progress 的外键
   question: string;  // 卡片正面；纯文本（禁 HTML）；trim 后 1–200 字符
   answer: string;    // 卡片背面；纯文本（禁 HTML）；trim 后 1–2000 字符
+  page?: number;     // v1.1 可选（D015）：来源课件页码，≥1 整数（1-based）；缺省 = 未标注页
 };
 
 type StudyDeck = {
@@ -25,6 +26,7 @@ type StudyDeck = {
 
 - 所有模块间只交换上述形状；`extractPoints` 产出、`renderPoints` 消费、storage 持久化。
 - 混合 PDF 的 sourceType 取**多数页**类型；warnings 中注明混合。
+- 分组规则（v1.1，D015）：清单中任一点有 page → 按 page 升序分组，组头「第 N 页」+ 该组条数；无 page 的点归入「未标注页」组置末；全部无 page → 扁平、无组头。行序号跨组连续。
 - 学习进度**不放进 points**，独立 ProgressMap（§4），保证换 deck 不串进度、重置进度不丢卡。
 
 ```ts
@@ -60,6 +62,7 @@ extractPoints(file: File): Promise<{ deck: StudyDeck; warnings: string[] }>
 renderPoints(points: Point[], root: HTMLElement): void
 ```
 - 全量替换 root 子节点；root 固定为 `#point-list`；行 UI 按 DESIGN.md §5.3（序号胶囊 + 问题文本 + 编辑/删除 ≥44px 热区）。
+- 分组按 §1 分组规则渲染（v1.1）；B 已兼容实现：有 page 自动分组、无 page 扁平降级。
 - 编辑/删除只发事件、不改 storage：root 上派发 `CustomEvent('point-edit', {detail:{id,question,answer}})`、`CustomEvent('point-delete', {detail:{id}})`；删除带 5s 撤销 toast（B 内部实现）。M1 内 A 不监听这两个事件（清单编辑的持久化在 M2 接 storage.saveDeck）。
 - 空数组：渲染 DESIGN §5.6 空状态，不裸"暂无数据"。
 
@@ -79,11 +82,11 @@ clearAll(): void   // 清三个 key，不动其他站点数据
 
 ## 3. DOM id（全局唯一；括号内为 owner）
 
-M1 必须存在（index.html 骨架由 A 提供，B 填充行为）：
+M1 必须存在（index.html 由 B 提供与维护，D014；DOM id 表与 v1.0 一致）：
 | id | 用途 |
 |---|---|
-| `#app` | 页面根容器 (A) |
-| `#topbar` | 顶栏 (A 骨架 / B 样式) |
+| `#app` | 页面根容器 (B) |
+| `#topbar` | 顶栏 (B) |
 | `#large-text-toggle` | 顶栏 "Aa" 大字开关，aria-pressed (B) |
 | `#mock-banner` | 示例模式横幅，mock 时可见，文案固定「示例模式：演示数据，非真实识别结果」 (B) |
 | `#upload-zone` | 上传区（拖拽 + 点选） (B) |
@@ -130,7 +133,7 @@ Function 业务错误体：`{ok:false, code, message}`；前端原样映射为 C
 
 - URL 含 `mock=1` → 进入示例模式：`#use-mock-btn` 可见；`extractPoints(file)` 忽略文件内容返回 mockDeck()；`#mock-banner` 常驻。
 - 非 mock 模式下收到 E_SERVICE_NOT_CONFIGURED 也降级 mock（横幅同上），保证评委零配置可演示。
-- mock 数据唯一来源 `data/mock-points.js`（12 条共享 fixture，取自 SAMPLE_REVIEW 16 考点的前 12 条）；**任何人不得在别处复制第二份 fixture**。
+- mock 数据唯一来源 `data/mock-points.js`（12 条共享 fixture，取自 SAMPLE_REVIEW 16 考点的前 12 条；v1.1 带页码 p01–p07→1、p08→2、p09–p12→3，与 sample-text.pdf 原页一致）；**任何人不得在别处复制第二份 fixture**。
 
 ```js
 // data/mock-points.js —— A 实现，ES module
@@ -148,6 +151,11 @@ export function mockDeck() { /* StudyDeck，deckId "d-mock"，sourceType 'mock'�
 
 ## 8. 验收（M1 合并门槛）
 
-- A：mock 路径端到端（?mock=1 → 使用示例课件 → 12 行清单）；storage 三 key 读写/损坏防御/quota 抛错；错误码表全覆盖单测式自检（console 断言脚本 tools/contract-check.mjs）。
-- B：清单 UI 全状态（默认/hover/编辑/删除+撤销/空态）；大字开关持久化；360px 宽无横向滚动；renderPoints 事件契约符合 §2。
+- A：mock 路径端到端（?mock=1 → 使用示例课件 → 12 行清单）；storage 三 key 读写/损坏防御/quota 抛错；错误码表全覆盖自检 `node tools/contract-check.mjs`（已在仓库、可复跑）+ dev/api-test.html 浏览器断言。
+- B：清单 UI 全状态（默认/hover/编辑/删除+撤销/空态）；大字开关持久化；360px 宽无横向滚动；renderPoints 事件契约符合 §2；page 分组实测（有 page 分组／无 page 扁平／混合未标注页置末）。
 - 双方：CONTRACT 字段零私自改动；异议都在 PR 讨论留痕。
+
+## 9. 变更记录
+
+- v1.0（11-18）：初版（PR #2）。
+- v1.1（11-18）：PR #2 评审异议 1（用户已确认）→ Point 增可选 `page?: number`、fixture 页码、分组规则（D015）；所有权表述同步 index.html 归 B（D014）；§8 自检脚本明确在仓库位置。加性可选字段：schemaVersion 仍 1、storage key .v1 不变，无 page 旧数据兼容扁平。
