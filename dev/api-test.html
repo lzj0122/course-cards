@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M1 A 侧契约自检（dev）</title>
+<style>
+  body { font: 16px/1.6 system-ui, "PingFang SC", "Microsoft YaHei", sans-serif; margin: 0 auto; max-width: 720px; padding: 24px 16px; color: #1c1917; background: #faf7f0; }
+  h1 { font-size: 22px; } h2 { font-size: 18px; margin-top: 32px; }
+  li.pass { color: #166534; } li.fail { color: #b91c1c; font-weight: 700; }
+  pre { background: #fff; border: 1px solid #e7e5e4; border-radius: 8px; padding: 12px; white-space: pre-wrap; word-break: break-all; }
+  button { font: inherit; padding: 8px 16px; margin: 4px 8px 4px 0; border-radius: 8px; border: 1px solid #4338ca; background: #4338ca; color: #fff; cursor: pointer; }
+  button.ghost { background: #fff; color: #4338ca; }
+  #summary { font-weight: 700; }
+</style>
+</head>
+<body>
+<h1>M1 A 侧契约自检（dev 页，非产品 UI）</h1>
+<p>只验证 js/api.js / js/storage.js / data/mock-points.js。ES Modules 需经本地 HTTP 服务打开，例如仓库根目录 <code>python -m http.server 8000</code> 后访问 /dev/api-test.html。</p>
+
+<h2>自动断言</h2>
+<ol id="results"></ol>
+<p id="summary">运行中…</p>
+
+<h2>手动：extractPoints(file)</h2>
+<input type="file" id="file" accept=".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf">
+<button id="run">解析（M1 返回 mock）</button>
+<pre id="out">尚未运行</pre>
+
+<h2>手动：storage</h2>
+<button id="save">saveDeck(mock)</button>
+<button id="load" class="ghost">loadDeck</button>
+<button id="clear" class="ghost">clearAll</button>
+<pre id="sout">尚未运行</pre>
+
+<script type="module">
+import { extractPoints, ContractError } from '../js/api.js';
+import * as storage from '../js/storage.js';
+import { mockDeck, MOCK_POINTS } from '../data/mock-points.js';
+
+const results = [];
+function assert(cond, msg) { if (!cond) throw new Error(msg || '断言失败'); }
+async function check(name, fn) {
+  try { await fn(); results.push([true, name]); }
+  catch (e) { results.push([false, `${name} → ${e && e.message}`]); }
+}
+async function expectCode(promise, code) {
+  try { await promise; }
+  catch (e) {
+    assert(e instanceof ContractError, `期望 ContractError，实际 ${e && e.name}`);
+    assert(e.code === code, `期望 ${code}，实际 ${e.code}`);
+    return;
+  }
+  throw new Error(`期望抛 ${code}，却成功了`);
+}
+const png = () => new File(['x'], 'a.png', { type: 'image/png' });
+
+await check('extractPoints(png) 返回 12 条 mock，sourceType/deckId/warnings 符合契约', async () => {
+  const { deck, warnings } = await extractPoints(png());
+  assert(deck.points.length === 12, `points=${deck.points.length}`);
+  assert(deck.sourceType === 'mock' && deck.deckId === 'd-mock', 'sourceType/deckId');
+  assert(deck.schemaVersion === 1, 'schemaVersion');
+  assert(warnings.some(w => w.includes('mock')), 'warnings 含 mock');
+  assert(deck.points.map(p => p.id).join() === MOCK_POINTS.map(p => p.id).join(), 'id 序列 p01…p12');
+});
+await check('mock 每条 question 1–200 / answer 1–2000 字符', async () => {
+  const { deck } = await extractPoints(png());
+  for (const p of deck.points) {
+    assert(p.question.trim().length >= 1 && p.question.length <= 200, `${p.id} question`);
+    assert(p.answer.trim().length >= 1 && p.answer.length <= 2000, `${p.id} answer`);
+  }
+});
+await check('v1.1 页码 p01–p07→1、p08→2、p09–p12→3', async () => {
+  const { deck } = await extractPoints(png());
+  assert(deck.points.map(p => p.page).join() === '1,1,1,1,1,1,1,2,3,3,3,3', 'page 映射');
+  assert(deck.points.every(p => Number.isInteger(p.page) && p.page >= 1), 'page ≥1 整数');
+});
+await check('extractPoints(pdf) 类型放行，M1 同样返回 mock', async () => {
+  const { deck } = await extractPoints(new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' }));
+  assert(deck.points.length === 12);
+});
+await check('非白名单类型抛 E_UNSUPPORTED_TYPE', () =>
+  expectCode(extractPoints(new File(['x'], 'a.txt', { type: 'text/plain' })), 'E_UNSUPPORTED_TYPE'));
+await check('空文件参数抛 E_UNSUPPORTED_TYPE', () => expectCode(extractPoints(null), 'E_UNSUPPORTED_TYPE'));
+await check('>20MB 抛 E_FILE_TOO_LARGE', () =>
+  expectCode(extractPoints(new File([new ArrayBuffer(21 * 1024 * 1024)], 'big.pdf', { type: 'application/pdf' })), 'E_FILE_TOO_LARGE'));
+await check('ContractError 是 Error 且带中文 message', () => {
+  const e = new ContractError('E_NETWORK');
+  assert(e instanceof Error && e.code === 'E_NETWORK');
+  assert(/[一-龥]/.test(e.message), 'message 中文');
+});
+await check('storage：deck 读写往返一致', () => {
+  storage.saveDeck(mockDeck());
+  assert(JSON.stringify(storage.loadDeck()) === JSON.stringify(mockDeck()));
+});
+await check('storage：progress 读写往返一致', () => {
+  const map = { p01: { streak: 1, mastered: false, inBook: false, attempts: 1, correct: 1 } };
+  storage.saveProgress(map);
+  assert(JSON.stringify(storage.loadProgress()) === JSON.stringify(map));
+});
+await check('storage：prefs 读写往返一致', () => {
+  storage.savePrefs({ largeText: true });
+  assert(storage.loadPrefs().largeText === true);
+  storage.savePrefs({ largeText: false });
+  assert(storage.loadPrefs().largeText === false);
+});
+await check('storage：损坏 JSON → deck null / progress {} / prefs 缺省，不抛错', () => {
+  localStorage.setItem('studyDeck.deck.v1', '{bad');
+  localStorage.setItem('studyDeck.progress.v1', '[1,2');
+  localStorage.setItem('studyDeck.prefs.v1', '"str"');
+  assert(storage.loadDeck() === null, 'deck');
+  assert(JSON.stringify(storage.loadProgress()) === '{}', 'progress');
+  assert(storage.loadPrefs().largeText === false, 'prefs');
+});
+await check('storage：写失败抛 ContractError E_STORAGE_QUOTA', () => {
+  const orig = Storage.prototype.setItem;
+  Storage.prototype.setItem = () => { throw new DOMException('quota', 'QuotaExceededError'); };
+  try {
+    let code = null;
+    try { storage.saveDeck(mockDeck()); } catch (e) { code = e.code; }
+    assert(code === 'E_STORAGE_QUOTA', `实际 ${code}`);
+  } finally { Storage.prototype.setItem = orig; }
+});
+await check('storage：clearAll 只清三个 key，不动其他数据', () => {
+  localStorage.setItem('studyDeck.dev.unrelated', '1');
+  storage.saveDeck(mockDeck());
+  storage.clearAll();
+  assert(localStorage.getItem('studyDeck.deck.v1') === null);
+  assert(localStorage.getItem('studyDeck.progress.v1') === null);
+  assert(localStorage.getItem('studyDeck.prefs.v1') === null);
+  assert(localStorage.getItem('studyDeck.dev.unrelated') === '1');
+  localStorage.removeItem('studyDeck.dev.unrelated');
+});
+
+const ol = document.getElementById('results');
+for (const [ok, name] of results) {
+  const li = document.createElement('li');
+  li.className = ok ? 'pass' : 'fail';
+  li.textContent = `${ok ? 'PASS' : 'FAIL'} ${name}`;
+  ol.appendChild(li);
+  console[ok ? 'log' : 'error'](li.textContent);
+}
+const passed = results.filter(r => r[0]).length;
+document.getElementById('summary').textContent = `${passed}/${results.length} 通过`;
+storage.clearAll();
+
+document.getElementById('run').addEventListener('click', async () => {
+  const out = document.getElementById('out');
+  const file = document.getElementById('file').files[0];
+  try {
+    const { deck, warnings } = await extractPoints(file || null);
+    out.textContent = JSON.stringify({ title: deck.title, sourceType: deck.sourceType, count: deck.points.length, warnings, first: deck.points[0] }, null, 2);
+  } catch (e) { out.textContent = `${e.code}: ${e.message}`; }
+});
+document.getElementById('save').addEventListener('click', () => {
+  const sout = document.getElementById('sout');
+  try { storage.saveDeck(mockDeck()); sout.textContent = 'saveDeck 成功'; }
+  catch (e) { sout.textContent = `${e.code}: ${e.message}`; }
+});
+document.getElementById('load').addEventListener('click', () => {
+  const deck = storage.loadDeck();
+  document.getElementById('sout').textContent = deck ? `loadDeck：${deck.title} / ${deck.points.length} 条` : 'loadDeck：null';
+});
+document.getElementById('clear').addEventListener('click', () => {
+  storage.clearAll();
+  document.getElementById('sout').textContent = 'clearAll 完成';
+});
+</script>
+</body>
+</html>
