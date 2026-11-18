@@ -2,6 +2,7 @@
 // 契约：CONTRACT.md v1.0 §2/§3/§6；视觉：DESIGN.md v1.0
 // 边界（D013）：不改 js/api.js / js/storage.js / data/mock-points.js；本步只消费 mock，不接 API。
 import { mockDeck } from '../data/mock-points.js';
+import { loadPrefs, savePrefs } from './storage.js'; // A 侧 storage.js（b37deb2）已就位，按契约 §2 只调用不修改
 
 const $ = (id) => document.getElementById(id);
 const root = $('point-list');
@@ -346,11 +347,16 @@ useMockBtn.addEventListener('click', runMock);
 retryBtn.addEventListener('click', () => { if (lastFile) handleFile(lastFile); else setState('idle'); });
 
 /* ---------------- 大字开关（DESIGN §2.3） ----------------
-   持久化待 A 推送 js/storage.js 后按契约 §2 接 loadPrefs/savePrefs
-   （用户已确认时序，PR #2 评审备注 3）；此处不直读写 localStorage。 */
+   持久化接 A 的 storage.js loadPrefs/savePrefs（契约 §2，用户确认时序已满足）；
+   写失败按 §5 E_STORAGE_QUOTA → toast 提示清理空间。 */
 aaToggle.addEventListener('click', () => {
   const on = document.documentElement.classList.toggle('large-text');
   aaToggle.setAttribute('aria-pressed', String(on));
+  try {
+    savePrefs({ largeText: on });
+  } catch (err) {
+    toast(err.message || '本地存储写入失败，请清理空间后重试。', 'error');
+  }
 });
 
 /* ---------------- 生成闪卡（M2 开放） ---------------- */
@@ -359,6 +365,9 @@ generateBtn.addEventListener('click', () => {
 });
 
 /* ---------------- init ---------------- */
+const prefs = loadPrefs(); // 损坏 JSON 时 storage 内部缺省 + warn，不抛错（契约 §2）
+document.documentElement.classList.toggle('large-text', prefs.largeText);
+aaToggle.setAttribute('aria-pressed', String(prefs.largeText));
 if (mockMode) {
   mockBanner.hidden = false;
   useMockBtn.hidden = false;
