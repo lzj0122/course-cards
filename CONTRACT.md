@@ -1,6 +1,6 @@
 # CONTRACT.md — M1 接口契约 v1.1
 
-> 状态：v1.1 增补待搭档复审（PR #2）。**字段歧义先提异议、双方确认后才改**，变更记录进 DECISIONS.md。
+> 状态：M1 已合并（PR #1/#2/#3）；M1-4 集成进行中（feat/m1-integrate）。**字段歧义先提异议、双方确认后才改**，变更记录进 DECISIONS.md。
 > 并行分工：A = `feat/m1-api-A`（js/api.js、js/storage.js、data/mock-points.js、tools/contract-check.mjs、dev/api-test.html）；B = `feat/m1-list-B`（index.html、js/list.js、css/list.css、上传区与清单 UI、样式、大字持久化）。B **不得修改** js/api.js / js/storage.js / data/mock-points.js。
 > 技术形态：纯静态 HTML + CSS + ES Modules，无构建步骤；pdf.js 以 vendor 本地文件引入（D012）。
 
