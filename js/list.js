@@ -1,8 +1,8 @@
-// js/list.js — M1 清单视图（B 侧，feat/m1-list-B）
-// 契约：CONTRACT.md v1.0 §2/§3/§6；视觉：DESIGN.md v1.0
-// 边界（D013）：不改 js/api.js / js/storage.js / data/mock-points.js；本步只消费 mock，不接 API。
-import { mockDeck } from '../data/mock-points.js';
-import { loadPrefs, savePrefs } from './storage.js'; // A 侧 storage.js（b37deb2）已就位，按契约 §2 只调用不修改
+// js/list.js — M1 清单视图（B 侧；M1-4 集成接线由 A 按 D017 授权完成）
+// 契约：CONTRACT.md v1.1 §2/§3/§5/§6；视觉：DESIGN.md v1.0
+// 边界（D013）：不改 js/api.js / js/storage.js / data/mock-points.js；提取统一经 extractPoints（M1 mock-first）。
+import { extractPoints, ContractError } from './api.js';
+import { loadPrefs, savePrefs } from './storage.js'; // 契约 §2 只调用不修改
 
 const $ = (id) => document.getElementById(id);
 const root = $('point-list');
@@ -153,12 +153,14 @@ function setState(s) {
   uploadZone.setAttribute('aria-busy', String(s === 'loading'));
 }
 
-async function runMock() {
+const STAGES = [['读取课件…', 20], ['识别内容…', 55], ['提取考点…', 85]];
+const MOCK_FILE = () => new File([], '示例课件.png', { type: 'image/png' });
+
+async function runExtract(file) {
   if (busy) return;
   busy = true;
   setState('loading');
-  const stages = [['读取课件…', 20], ['识别内容…', 55], ['提取考点…', 85]];
-  for (const [text, p] of stages) {
+  for (const [text, p] of STAGES) {
     stageText.textContent = text;
     progressFill.style.width = `${p}%`;
     progressEl.setAttribute('aria-valuenow', String(p));
@@ -167,26 +169,27 @@ async function runMock() {
   progressFill.style.width = '100%';
   progressEl.setAttribute('aria-valuenow', '100');
   await sleep(200);
-  const deck = mockDeck(); // 唯一 fixture 来源（契约 §6，D013）
-  working = deck.points;
-  selected.clear();
-  editingId = null;
-  renderPoints(working, root);
-  setState(working.length ? 'success' : 'empty');
-  toast(`已加载示例课件：${working.length} 个考点`, 'success');
+  try {
+    const { deck } = await extractPoints(file); // mock 路径忽略文件内容（契约 §6）
+    working = deck.points;
+    selected.clear();
+    editingId = null;
+    renderPoints(working, root);
+    setState(working.length ? 'success' : 'empty');
+    mockBanner.hidden = deck.sourceType !== 'mock';
+    toast(`已提取 ${working.length} 个考点`, 'success');
+  } catch (err) {
+    uploadError.dataset.code = err instanceof ContractError ? err.code : 'E_NETWORK';
+    errorReason.textContent = err instanceof ContractError ? err.message : '未知错误，请重试。';
+    setState('error');
+  }
   busy = false;
 }
 
 function handleFile(file) {
   if (!file) return;
   lastFile = file;
-  if (mockMode) {
-    runMock(); // mock 路径忽略文件内容（契约 §6）
-  } else {
-    // B 侧本步不接 API（用户第三步指令）；真实识别 M1-4 集成接通。
-    errorReason.textContent = `「${file.name}」已收到。真实识别将在集成阶段（M1-4）接通，当前分支仅消费示例数据：请改用 ?mock=1 打开本页，或点击「使用示例课件」。`;
-    setState('error');
-  }
+  runExtract(file);
 }
 
 /* ---------------- toast（§5.6，删除撤销 5s） ---------------- */
@@ -343,7 +346,7 @@ uploadZone.addEventListener('drop', (e) => {
   handleFile(e.dataTransfer.files[0]);
 });
 fileInput.addEventListener('change', () => { handleFile(fileInput.files[0]); fileInput.value = ''; });
-useMockBtn.addEventListener('click', runMock);
+useMockBtn.addEventListener('click', () => runExtract(MOCK_FILE()));
 retryBtn.addEventListener('click', () => { if (lastFile) handleFile(lastFile); else setState('idle'); });
 
 /* ---------------- 大字开关（DESIGN §2.3） ----------------

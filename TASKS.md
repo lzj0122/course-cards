@@ -1,15 +1,15 @@
 # TASKS.md — 里程碑与分工
 
 > 分支约定：feature 分支 + PR + 对方 1 approval + squash merge（D008）。main 受保护，任何人不得直推。
-> A = lzj0122（我）；B = wgy0523（搭档）。契约见 CONTRACT.md，视觉见 DESIGN.md（PR #1 待酸绿文字色修复后合并）。
+> A = lzj0122（我）；B = wgy0523（搭档）。契约见 CONTRACT.md v1.1，视觉见 DESIGN.md v1.0（已合并）。
 
 ## M1 — 上传 → 考点清单（当前）
 | # | 任务 | Owner | 分支 | 验收 |
 |---|---|---|---|---|
 | M1-0 | CONTRACT/TASKS/DECISIONS + mock fixture | A | feat/m1-api-A | 搭档评审无歧义 |
-| M1-1 | js/storage.js + index.html 骨架（§3 id 全在） | A | feat/m1-api-A | CONTRACT §8 A 项 |
+| M1-1 | js/storage.js（七函数三 key） | A | feat/m1-api-A | CONTRACT §8 A 项 |
 | M1-2 | js/api.js：校验链 + mock 路径 + Function 客户端（真实管线接 pdf.js vendor） | A | feat/m1-api-A | mock 端到端 + 错误码自检 |
-| M1-3 | js/list.js + 上传区/清单/大字开关/toast UI | B | feat/m1-list-B | CONTRACT §8 B 项 |
+| M1-3 | index.html + js/list.js + css/list.css + 上传区/清单/大字开关/toast UI | B | feat/m1-list-B | CONTRACT §8 B 项 |
 | M1-4 | 集成：?mock=1 全链路 + 360px 真机/模拟器 | A+B | 集成分支 feat/m1-integrate | 手机宽度走通上传→清单 |
 
 ## M2 — 闪卡自测 + 错题本 + 统计
@@ -31,7 +31,7 @@
 - 比赛材料：README 演示说明、截图 — B
 - 截止 **2026-11-30 18:00**；M3 部署不晚于 11-27，留 3 天缓冲。
 
-## 当前状态（2026-11-18）
-- PR #1（搭档 DESIGN/SAMPLE_REVIEW/tools）：lzj0122 已评审 CHANGES_REQUESTED（酸绿按钮文字色 §1.2/§1.4 矛盾），待搭档修复后 approve+merge。
-- feat/m1-api-A：本 PR（契约三文档 + mock fixture）。
-- feat/m1-list-B：搭档已开空分支，待 CONTRACT 评审通过后动工。
+## 当前状态（2026-11-19）
+- PR #1/#2/#3 均已 squash 合并（main = acc59b0）：设计/鉴定、契约 v1.1 + A 侧 api/storage/fixture/自检、B 侧清单 UI。M1-0…M1-3 完成。
+- M1-4 进行中：feat/m1-integrate（PR #4）。用户 11-19 授权 A 代闭环（D017）：文档走查 + list.js 接 extractPoints + ContractError→#upload-error（§5）+ ?mock=1 全链路 + 360/375 模拟器走查；待搭档评审 approve 后 squash。
+- 在册承诺：M2 loadDeck 形状校验；M4 删除动画（D016）；M3 pdf.js vendor + 真实管线 + Function/Secret + 部署（≤11-27）。
