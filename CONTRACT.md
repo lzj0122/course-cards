@@ -67,7 +67,7 @@ renderPoints(points: Point[], root: HTMLElement): void
 ```
 - 全量替换 root 子节点；root 固定为 `#point-list`；行 UI 按 DESIGN.md §5.3（序号胶囊 + 问题文本 + 编辑/删除 ≥44px 热区）。
 - 分组按 §1 分组规则渲染（v1.1）；B 已兼容实现：有 page 自动分组、无 page 扁平降级。
-- 编辑/删除只发事件、不改 storage：root 上派发 `CustomEvent('point-edit', {detail:{id,question,answer}})`、`CustomEvent('point-delete', {detail:{id}})`；删除带 5s 撤销 toast（B 内部实现）。M1 内 A 不监听这两个事件（清单编辑的持久化在 M2 接 storage.saveDeck）。
+- 编辑/删除只发事件、不改 storage：root 上派发 `CustomEvent('point-edit', {detail:{id,question,answer}})`、`CustomEvent('point-delete', {detail:{id}})`；删除带 5s 撤销 toast（B 内部实现）。A 不监听这两个事件；编辑/删除后的落盘自第四步由 B 接 `storage.saveDeck`（D020，见本节 deck 持久化条）。
 - 空数组：渲染 DESIGN §5.6 空状态，不裸"暂无数据"。
 
 ```ts
@@ -154,11 +154,13 @@ export function mockDeck() { /* StudyDeck，deckId "d-mock"，sourceType 'mock'�
 - 密钥仅服务端 Secret（Deno.env.get），前端与仓库永不出现明文。
 - 上游（v1.2，D019）：固定 DashScope OpenAI 兼容端点 `https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions`；text 通道 qwen-plus、images 通道 qwen-vl-max；服务端超时 60s；不回传密钥/原始上游异常。
 - 部署：`prepare_site.secretNames=['APP_API_KEY']`；Functions 就绪后由 Owner 在 Portal Settings 录密钥并确认同步，再发布依赖版本（M3/第四步部署环节）。
+- 客户端降级（v1.2 修订，D023/异议 3）：ENDPOINT 返回 HTTP 404 或非 JSON 响应 → `E_SERVICE_NOT_CONFIGURED`（走既有自动降级示例+横幅，D004）；「已部署未录密钥」的服务端 `{ok:false,code:'E_SERVICE_NOT_CONFIGURED'}` JSON 路径不变；瞬态重试仍仅 E_NETWORK/E_UPSTREAM 1 次。
 
 ## 8. 验收（M1 合并门槛）
 
-- A：mock 路径端到端（?mock=1 → 使用示例课件 → 12 行清单）；storage 三 key 读写/损坏防御/quota 抛错；错误码表全覆盖 + 真实链路 fetch-stub（解析/重试1/降级/错误映射/Function handler 逻辑）自检 `node tools/contract-check.mjs`（41 断言、可复跑）+ dev/api-test.html 双模式浏览器断言（?mock=1 与非 mock 各 15；非 mock 用 `python tools/serve.py` 修正 .mjs MIME）。
+- A：mock 路径端到端（?mock=1 → 使用示例课件 → 12 行清单）；storage 三 key 读写/损坏防御/quota 抛错；错误码表全覆盖 + 真实链路 fetch-stub（解析/重试1/降级/错误映射/Function handler 逻辑）自检 `node tools/contract-check.mjs`（42 断言、可复跑）+ dev/api-test.html 双模式浏览器断言（?mock=1 15、非 mock 16；非 mock 用 `python tools/serve.py` 修正 .mjs MIME）。
 - B：清单 UI 全状态（默认/hover/编辑/删除+撤销/空态）；大字开关持久化；360px 宽无横向滚动；renderPoints 事件契约符合 §2；page 分组实测（有 page 分组／无 page 扁平／混合未标注页置末）。
+- step-4（v1.2，D019/D020/D021，恢复自 42f0b42 误删）：真实截图 + 文字 PDF + 扫描 PDF 各 3 次（9/9）；刷新后清单恢复（loadDeck）；clearAll 彻底（B dev/list-test.html：只清三 key、不动他站数据、清空后回 idle）；375px 及 360px × 常规/大字四组零溢出；console 零消息。B 公网实测证据见 step4-runtime-evidence.md（PR #7）。
 - 双方：CONTRACT 字段零私自改动；异议都在 PR 讨论留痕。
 
 ## 9. 变更记录
@@ -166,3 +168,4 @@ export function mockDeck() { /* StudyDeck，deckId "d-mock"，sourceType 'mock'�
 - v1.0（11-18）：初版（PR #2）。
 - v1.1（11-18）：PR #2 评审异议 1（用户已确认）→ Point 增可选 `page?: number`、fixture 页码、分组规则（D015）；所有权表述同步 index.html 归 B（D014）；§8 自检脚本明确在仓库位置。加性可选字段：schemaVersion 仍 1、storage key .v1 不变，无 page 旧数据兼容扁平。
 - v1.2（11-19，第四步，用户确认 D019/D020/D021，待 B PR 评审确认）：真实管线落地（维持 D006 逐页，不采纳「前3页」）；加性客户端压缩（≤1600px JPEG0.8）与失败自动重试 1 次（仅瞬态）；多数页通道 + 混合 warnings；deck 持久化提前自 M2（B 接 saveDeck 提取/编辑/删除/撤销 + loadDeck init）；**clearAll 验收走 B dev/list-test.html、产品不加清空按钮、§3 零新增**（D021 推翻 D019③）；§7 上游 DashScope qwen-plus/qwen-vl-max + secretNames；node 自检默认 mock、dev 双模式 + tools/serve.py。schemaVersion 仍 1、key .v1 不变（无字段删改）。
+- v1.2 修订（11-20，PR #6 复评闭环，D023）：异议 3 §7 增 404/非 JSON → E_SERVICE_NOT_CONFIGURED 降级；异议 4 移除 DECISIONS D019 inline 注；异议 5 恢复 §8 step-4 验收条；异议 6 恢复 §2 编辑/删除持久化 step-4 时序；TASKS M2 移除已提前的 saveDeck 行；自检 41→42 断言、dev 非 mock 15→16（404 降级断言）。视觉模型 qwen3-vl-plus 修复随 PR #7（D022），本修订不改 handler。

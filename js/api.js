@@ -152,11 +152,13 @@ async function callFunction(payload) {
   } catch {
     throw new ContractError('E_NETWORK');
   }
+  // 404 或非 JSON = Function 未部署/网关异常，按 D004 零配置演示意图降级示例（D023）。
+  if (res.status === 404) throw new ContractError('E_SERVICE_NOT_CONFIGURED');
   let body;
   try {
     body = await res.json();
   } catch {
-    throw new ContractError('E_INVALID_PAYLOAD');
+    throw new ContractError('E_SERVICE_NOT_CONFIGURED');
   }
   if (!body || typeof body !== 'object') throw new ContractError('E_INVALID_PAYLOAD');
   if (body.ok === false) {

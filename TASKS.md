@@ -17,7 +17,6 @@
 - 自评状态机 + ProgressMap 持久化（CONTRACT §1）— A
 - 错题本视图（inBook 过滤、连对 2 次移出、半掌握 1/2 徽标）— B
 - 统计页（正确率环图 + 已掌握数，直接数值标签）— B
-- 清单编辑/删除持久化接 saveDeck（point-edit/point-delete 事件）— A
 
 ## M3 — Function + Secret + 部署
 - functions/ Edge Function：/extract 文本与视觉两通道，Secret 读 APP_API_KEY，未配返回 service_not_configured — A
@@ -31,9 +30,9 @@
 - 比赛材料：README 演示说明、截图 — B
 - 截止 **2026-11-30 18:00**；M3 部署不晚于 11-27，留 3 天缓冲。
 
-## 当前状态（2026-11-19）
+## 当前状态（2026-11-20）
 - M1 全闭环：PR #1–#4 均 squash 合并（main = 38fac84）。M1-0…M1-4 完成。
-- 第四步（真实链路，D019）进行中：A 侧 feat/m3-real-A 已完成 vendor pdf.js + api.js 真实管线（压缩/逐页/两通道/JSON/重试1/错误映射/降级/mock 兜底）+ functions/（DashScope-Qwen）+ 自检 41 断言 + dev 双模式；待开 PR 交 B 评审。
-- 第四步 B 侧待办：list.js 接 saveDeck(提取/编辑/删除/撤销)+loadDeck(init)（刷新仍在）+ dev/list-test.html（clearAll 验收，产品不加按钮 D020/D021）+ 真实截图/两种 PDF 各测 3 次 + 375px；提 PR 由 A review 后合并。
-- 部署/密钥待用户动作：用户暂无 DashScope 密钥→先创建；prepare_site 授权 + Functions 就绪后 Owner 在 Portal 录 APP_API_KEY + 发布（≤11-27）；录密钥前真实请求自动降级 mock。
+- 第四步（真实链路，D019）进行中：A 侧 feat/m3-real-A = vendor pdf.js + api.js 真实管线（压缩/逐页/两通道/JSON/重试1/错误映射/降级/mock 兜底）+ functions/（DashScope-Qwen）+ 自检 42 断言 + dev 双模式（?mock=1 15、非 mock 16）。PR #6 已开，B 复评异议 3–6 已回应（D023：404/非 JSON → 降级示例+横幅；文档恢复/只增不改）；待 B 复评 + 用户指示 approve 后 squash。
+- 第四步 B 侧：PR #7 已开（五态接真实请求 + deck 持久化 + D022 视觉模型 qwen3-vl-plus + 公网实测证据 step4-runtime-evidence.md，9/9）；合并顺序 #6 先、#7 后（用户 11-20 确认），B rebase 去重 D020 行后由 A review 再 squash。
+- 部署/密钥：APP_API_KEY 已由 Owner 录入并 synced，descriptor 已写、canPublish=true；发布按用户裁决推迟至 M2 完成 + PR 合并后（≤11-27）。录密钥前真实请求自动降级 mock。
 - 在册承诺：M2 loadDeck 形状校验 + 闪卡/错题本/统计；M4 删除动画（D016）；warnings 披露 UI 随 M3（PR #4 备注 1）。

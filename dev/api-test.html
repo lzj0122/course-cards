@@ -199,6 +199,18 @@ if (mockMode) {
       assert(warnings.some(w => w.includes('service_not_configured')));
     } finally { globalThis.fetch = realFetch; }
   });
+  await check('真实管线：Function 404 → 自动降级 mock + 横幅（D023）', async () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 8; canvas.height = 8;
+    const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+    const file = new File([blob], 'ok.png', { type: 'image/png' });
+    globalThis.fetch = async () => new Response('not found', { status: 404 });
+    try {
+      const { deck, warnings } = await extractPoints(file);
+      assert(deck.sourceType === 'mock' && deck.points.length === 12);
+      assert(warnings.some(w => w.includes('service_not_configured')));
+    } finally { globalThis.fetch = realFetch; }
+  });
 }
 
 const ol = document.getElementById('results');

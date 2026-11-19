@@ -93,7 +93,9 @@ ok('空 question → E_INVALID_PAYLOAD', await codeOf(requestPoints({ kind: 'tex
 setFetch(async () => Response.json({ ok: true, points: [] }));
 ok('0 条 → E_EMPTY_POINTS', await codeOf(requestPoints({ kind: 'text', text: 't', fileName: 'f' }, 'pdf-text')) === 'E_EMPTY_POINTS');
 setFetch(async () => new Response('<html>'));
-ok('非 JSON 响应 → E_INVALID_PAYLOAD', await codeOf(requestPoints({ kind: 'text', text: 't', fileName: 'f' }, 'pdf-text')) === 'E_INVALID_PAYLOAD');
+ok('非 JSON 响应 → E_SERVICE_NOT_CONFIGURED（降级，D023）', await codeOf(requestPoints({ kind: 'text', text: 't', fileName: 'f' }, 'pdf-text')) === 'E_SERVICE_NOT_CONFIGURED');
+setFetch(async () => new Response('not found', { status: 404 }));
+ok('404 → E_SERVICE_NOT_CONFIGURED（降级，D023）', await codeOf(requestPoints({ kind: 'text', text: 't', fileName: 'f' }, 'pdf-text')) === 'E_SERVICE_NOT_CONFIGURED');
 setFetch(async () => Response.json({ ok: false, code: 'WEIRD', message: 'x' }));
 ok('未知 ok:false code → E_UPSTREAM', await codeOf(requestPoints({ kind: 'text', text: 't', fileName: 'f' }, 'pdf-text')) === 'E_UPSTREAM');
 setFetch(realFetch);
