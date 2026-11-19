@@ -58,7 +58,8 @@ extractPoints(file: File): Promise<{ deck: StudyDeck; warnings: string[] }>
 - mock 路径（§6）：不读文件内容，直接返回 mockDeck()，warnings 含 "mock"；node 自检无 location 时默认 mock 以保证可复跑（v1.2）。
 - Function 返回 E_SERVICE_NOT_CONFIGURED 时**自动降级 mock**，warnings 含 "service_not_configured"。
 - points 的 id 由前端按返回顺序赋 p01…；服务端不传 id。
-- deck 持久化（v1.2，第四步提前自 M2）：extract 成功后 `saveDeck(deck)`、启动 `loadDeck()` 恢复，保证刷新后数据仍在；由 B 在 list.js 接线（A 不改 B 文件）。
+- deck 持久化（v1.2，第四步提前自 M2，D020）：B 在 list.js 接 `saveDeck`（提取/编辑/删除/撤销后）+ 启动 `loadDeck()` 恢复清单，保证刷新后数据仍在；M2 只做 ProgressMap/错题本/统计。A 不改 B 文件。
+- clearAll 验收入口 = B 的 `dev/list-test.html`（v1.2，D020/D021）：**产品 UI 不加清空按钮、§3 id 零新增**；断言清三 key、不动他站数据、清空后刷新回 idle。
 
 ```ts
 // js/list.js —— B 实现
@@ -102,7 +103,6 @@ M1 必须存在（index.html 由 B 提供与维护，D014；DOM id 表与 v1.0 �
 | `#select-all` | 全选复选框 (B) |
 | `#generate-deck-btn` | 底部吸附栏「生成闪卡」主按钮 (B) |
 | `#toast-region` | toast 容器，aria-live=polite (B) |
-| `#clear-data-btn` | v1.2 第四步新增 (B)：「清空学习数据」按钮，二次确认后接 storage.clearAll()，清三 key 并回 idle 空态 |
 
 M2 预留（M1 不得实现、不得占用）：`#card-stage` `#flip-card` `#rate-remembered` `#rate-forgot` `#stats-accuracy` `#stats-mastered` `#mistake-book`。
 
@@ -165,4 +165,4 @@ export function mockDeck() { /* StudyDeck，deckId "d-mock"，sourceType 'mock'�
 
 - v1.0（11-18）：初版（PR #2）。
 - v1.1（11-18）：PR #2 评审异议 1（用户已确认）→ Point 增可选 `page?: number`、fixture 页码、分组规则（D015）；所有权表述同步 index.html 归 B（D014）；§8 自检脚本明确在仓库位置。加性可选字段：schemaVersion 仍 1、storage key .v1 不变，无 page 旧数据兼容扁平。
-- v1.2（11-19，第四步，用户五项确认 D019，待 B PR 评审确认）：真实管线落地（维持 D006 逐页，不采纳「前3页」）；加性客户端压缩（≤1600px JPEG0.8）与失败自动重试 1 次（仅瞬态）；多数页通道 + 混合 warnings；deck 持久化提前自 M2（B 接 saveDeck/loadDeck）；新增 `#clear-data-btn`（B）；§7 上游 DashScope qwen-plus/qwen-vl-max + secretNames；node 自检默认 mock、dev 双模式 + tools/serve.py。schemaVersion 仍 1、key .v1 不变（无字段删改）。
+- v1.2（11-19，第四步，用户确认 D019/D020/D021，待 B PR 评审确认）：真实管线落地（维持 D006 逐页，不采纳「前3页」）；加性客户端压缩（≤1600px JPEG0.8）与失败自动重试 1 次（仅瞬态）；多数页通道 + 混合 warnings；deck 持久化提前自 M2（B 接 saveDeck 提取/编辑/删除/撤销 + loadDeck init）；**clearAll 验收走 B dev/list-test.html、产品不加清空按钮、§3 零新增**（D021 推翻 D019③）；§7 上游 DashScope qwen-plus/qwen-vl-max + secretNames；node 自检默认 mock、dev 双模式 + tools/serve.py。schemaVersion 仍 1、key .v1 不变（无字段删改）。

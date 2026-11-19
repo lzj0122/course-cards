@@ -34,6 +34,6 @@
 ## 当前状态（2026-11-19）
 - M1 全闭环：PR #1–#4 均 squash 合并（main = 38fac84）。M1-0…M1-4 完成。
 - 第四步（真实链路，D019）进行中：A 侧 feat/m3-real-A 已完成 vendor pdf.js + api.js 真实管线（压缩/逐页/两通道/JSON/重试1/错误映射/降级/mock 兜底）+ functions/（DashScope-Qwen）+ 自检 41 断言 + dev 双模式；待开 PR 交 B 评审。
-- 第四步 B 侧待办：list.js 接 saveDeck/loadDeck（刷新仍在）+ index.html 加 #clear-data-btn（清空彻底）+ 真实截图/两种 PDF 各测 3 次 + 375px；提 PR 由 A review 后合并。
-- 部署/密钥待用户动作：prepare_site 授权 + Functions 就绪后 Owner 在 Portal 录 APP_API_KEY + 发布（≤11-27）；录密钥前真实请求自动降级 mock。
+- 第四步 B 侧待办：list.js 接 saveDeck(提取/编辑/删除/撤销)+loadDeck(init)（刷新仍在）+ dev/list-test.html（clearAll 验收，产品不加按钮 D020/D021）+ 真实截图/两种 PDF 各测 3 次 + 375px；提 PR 由 A review 后合并。
+- 部署/密钥待用户动作：用户暂无 DashScope 密钥→先创建；prepare_site 授权 + Functions 就绪后 Owner 在 Portal 录 APP_API_KEY + 发布（≤11-27）；录密钥前真实请求自动降级 mock。
 - 在册承诺：M2 loadDeck 形状校验 + 闪卡/错题本/统计；M4 删除动画（D016）；warnings 披露 UI 随 M3（PR #4 备注 1）。
