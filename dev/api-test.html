@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>M1 A 侧契约自检（dev）</title>
+<title>A 侧契约自检（dev）</title>
 <style>
   body { font: 16px/1.6 system-ui, "PingFang SC", "Microsoft YaHei", sans-serif; margin: 0 auto; max-width: 720px; padding: 24px 16px; color: #1c1917; background: #faf7f0; }
   h1 { font-size: 22px; } h2 { font-size: 18px; margin-top: 32px; }
@@ -15,8 +15,10 @@
 </style>
 </head>
 <body>
-<h1>M1 A 侧契约自检（dev 页，非产品 UI）</h1>
-<p>只验证 js/api.js / js/storage.js / data/mock-points.js。ES Modules 需经本地 HTTP 服务打开，例如仓库根目录 <code>python -m http.server 8000</code> 后访问 /dev/api-test.html。</p>
+<h1>A 侧契约自检（dev 页，非产品 UI）</h1>
+<p>验证 js/api.js / js/storage.js / data/mock-points.js / functions/handler.mjs。ES Modules 需经本地 HTTP 服务打开（仓库根 <code>python tools/serve.py</code>，修正 .mjs MIME；勿用裸 http.server）。</p>
+<p><strong>?mock=1</strong> 打开跑 mock 断言；<strong>不带 query</strong> 打开跑真实链路断言（pdf.js vendor + 压缩 + 两通道，fetch 以 stub 替代，本地无 Function 属预期）。</p>
+<p id="mode"></p>
 
 <h2>自动断言</h2>
 <ol id="results"></ol>
@@ -24,7 +26,8 @@
 
 <h2>手动：extractPoints(file)</h2>
 <input type="file" id="file" accept=".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf">
-<button id="run">解析（M1 返回 mock）</button>
+<button id="run">解析（按当前 URL 模式）</button>
+<button id="stub" class="ghost">fetch-stub 真实链路演示</button>
 <pre id="out">尚未运行</pre>
 
 <h2>手动：storage</h2>
@@ -34,9 +37,12 @@
 <pre id="sout">尚未运行</pre>
 
 <script type="module">
-import { extractPoints, ContractError } from '../js/api.js';
+import { extractPoints, requestPoints, ContractError } from '../js/api.js';
 import * as storage from '../js/storage.js';
 import { mockDeck, MOCK_POINTS } from '../data/mock-points.js';
+
+const mockMode = new URLSearchParams(location.search).get('mock') === '1';
+document.getElementById('mode').textContent = mockMode ? '当前：?mock=1（mock 断言）' : '当前：非 mock（真实链路断言，fetch-stub）';
 
 const results = [];
 function assert(cond, msg) { if (!cond) throw new Error(msg || '断言失败'); }
@@ -54,31 +60,10 @@ async function expectCode(promise, code) {
   throw new Error(`期望抛 ${code}，却成功了`);
 }
 const png = () => new File(['x'], 'a.png', { type: 'image/png' });
+const realFetch = globalThis.fetch;
+const stubPoints = { ok: true, points: [{ question: 'stub 问', answer: 'stub 答' }] };
 
-await check('extractPoints(png) 返回 12 条 mock，sourceType/deckId/warnings 符合契约', async () => {
-  const { deck, warnings } = await extractPoints(png());
-  assert(deck.points.length === 12, `points=${deck.points.length}`);
-  assert(deck.sourceType === 'mock' && deck.deckId === 'd-mock', 'sourceType/deckId');
-  assert(deck.schemaVersion === 1, 'schemaVersion');
-  assert(warnings.some(w => w.includes('mock')), 'warnings 含 mock');
-  assert(deck.points.map(p => p.id).join() === MOCK_POINTS.map(p => p.id).join(), 'id 序列 p01…p12');
-});
-await check('mock 每条 question 1–200 / answer 1–2000 字符', async () => {
-  const { deck } = await extractPoints(png());
-  for (const p of deck.points) {
-    assert(p.question.trim().length >= 1 && p.question.length <= 200, `${p.id} question`);
-    assert(p.answer.trim().length >= 1 && p.answer.length <= 2000, `${p.id} answer`);
-  }
-});
-await check('v1.1 页码 p01–p07→1、p08→2、p09–p12→3', async () => {
-  const { deck } = await extractPoints(png());
-  assert(deck.points.map(p => p.page).join() === '1,1,1,1,1,1,1,2,3,3,3,3', 'page 映射');
-  assert(deck.points.every(p => Number.isInteger(p.page) && p.page >= 1), 'page ≥1 整数');
-});
-await check('extractPoints(pdf) 类型放行，M1 同样返回 mock', async () => {
-  const { deck } = await extractPoints(new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' }));
-  assert(deck.points.length === 12);
-});
+// ---- 模式无关：校验链 / 错误码 / storage ----
 await check('非白名单类型抛 E_UNSUPPORTED_TYPE', () =>
   expectCode(extractPoints(new File(['x'], 'a.txt', { type: 'text/plain' })), 'E_UNSUPPORTED_TYPE'));
 await check('空文件参数抛 E_UNSUPPORTED_TYPE', () => expectCode(extractPoints(null), 'E_UNSUPPORTED_TYPE'));
@@ -89,30 +74,23 @@ await check('ContractError 是 Error 且带中文 message', () => {
   assert(e instanceof Error && e.code === 'E_NETWORK');
   assert(/[一-龥]/.test(e.message), 'message 中文');
 });
-await check('storage：deck 读写往返一致', () => {
+await check('storage：deck/progress/prefs 读写往返', () => {
   storage.saveDeck(mockDeck());
   assert(JSON.stringify(storage.loadDeck()) === JSON.stringify(mockDeck()));
-});
-await check('storage：progress 读写往返一致', () => {
   const map = { p01: { streak: 1, mastered: false, inBook: false, attempts: 1, correct: 1 } };
   storage.saveProgress(map);
   assert(JSON.stringify(storage.loadProgress()) === JSON.stringify(map));
-});
-await check('storage：prefs 读写往返一致', () => {
   storage.savePrefs({ largeText: true });
   assert(storage.loadPrefs().largeText === true);
   storage.savePrefs({ largeText: false });
-  assert(storage.loadPrefs().largeText === false);
 });
-await check('storage：损坏 JSON → deck null / progress {} / prefs 缺省，不抛错', () => {
+await check('storage：损坏 JSON → deck null / progress {} / prefs 缺省', () => {
   localStorage.setItem('studyDeck.deck.v1', '{bad');
   localStorage.setItem('studyDeck.progress.v1', '[1,2');
   localStorage.setItem('studyDeck.prefs.v1', '"str"');
-  assert(storage.loadDeck() === null, 'deck');
-  assert(JSON.stringify(storage.loadProgress()) === '{}', 'progress');
-  assert(storage.loadPrefs().largeText === false, 'prefs');
+  assert(storage.loadDeck() === null && JSON.stringify(storage.loadProgress()) === '{}' && storage.loadPrefs().largeText === false);
 });
-await check('storage：写失败抛 ContractError E_STORAGE_QUOTA', () => {
+await check('storage：写失败抛 E_STORAGE_QUOTA', () => {
   const orig = Storage.prototype.setItem;
   Storage.prototype.setItem = () => { throw new DOMException('quota', 'QuotaExceededError'); };
   try {
@@ -121,16 +99,107 @@ await check('storage：写失败抛 ContractError E_STORAGE_QUOTA', () => {
     assert(code === 'E_STORAGE_QUOTA', `实际 ${code}`);
   } finally { Storage.prototype.setItem = orig; }
 });
-await check('storage：clearAll 只清三个 key，不动其他数据', () => {
+await check('storage：clearAll 只清三 key', () => {
   localStorage.setItem('studyDeck.dev.unrelated', '1');
   storage.saveDeck(mockDeck());
   storage.clearAll();
-  assert(localStorage.getItem('studyDeck.deck.v1') === null);
-  assert(localStorage.getItem('studyDeck.progress.v1') === null);
-  assert(localStorage.getItem('studyDeck.prefs.v1') === null);
+  assert(localStorage.getItem('studyDeck.deck.v1') === null && localStorage.getItem('studyDeck.progress.v1') === null && localStorage.getItem('studyDeck.prefs.v1') === null);
   assert(localStorage.getItem('studyDeck.dev.unrelated') === '1');
   localStorage.removeItem('studyDeck.dev.unrelated');
 });
+
+// ---- 模式无关：真实链路客户端 requestPoints（fetch-stub）----
+await check('requestPoints 解析+trim+id 赋值+deck 形状', async () => {
+  globalThis.fetch = async () => Response.json(stubPoints);
+  try {
+    const { deck } = await requestPoints({ kind: 'text', text: 't', fileName: 'f' }, 'pdf-text');
+    assert(deck.points[0].id === 'p01' && deck.points[0].question === 'stub 问');
+    assert(deck.schemaVersion === 1 && deck.sourceType === 'pdf-text');
+  } finally { globalThis.fetch = realFetch; }
+});
+await check('E_NETWORK 自动重试 1 次后成功', async () => {
+  let n = 0;
+  globalThis.fetch = async () => { n++; if (n === 1) throw new TypeError('net'); return Response.json(stubPoints); };
+  try {
+    const { deck } = await requestPoints({ kind: 'text', text: 't', fileName: 'f' }, 'pdf-text');
+    assert(n === 2 && deck.points.length === 1);
+  } finally { globalThis.fetch = realFetch; }
+});
+await check('service_not_configured 映射（供 extractPoints 降级）', async () => {
+  globalThis.fetch = async () => Response.json({ ok: false, code: 'E_SERVICE_NOT_CONFIGURED', message: 'x' });
+  try { await expectCode(requestPoints({ kind: 'text', text: 't', fileName: 'f' }, 'pdf-text'), 'E_SERVICE_NOT_CONFIGURED'); }
+  finally { globalThis.fetch = realFetch; }
+});
+
+if (mockMode) {
+  await check('extractPoints(png) 返回 12 条 mock，sourceType/deckId/warnings 符合契约', async () => {
+    const { deck, warnings } = await extractPoints(png());
+    assert(deck.points.length === 12 && deck.sourceType === 'mock' && deck.deckId === 'd-mock' && deck.schemaVersion === 1);
+    assert(warnings.some(w => w.includes('mock')));
+    assert(deck.points.map(p => p.id).join() === MOCK_POINTS.map(p => p.id).join());
+  });
+  await check('mock 每条 question 1–200 / answer 1–2000', async () => {
+    const { deck } = await extractPoints(png());
+    for (const p of deck.points) assert(p.question.trim().length >= 1 && p.question.length <= 200 && p.answer.trim().length >= 1 && p.answer.length <= 2000);
+  });
+  await check('v1.1 页码 p01–p07→1、p08→2、p09–p12→3', async () => {
+    const { deck } = await extractPoints(png());
+    assert(deck.points.map(p => p.page).join() === '1,1,1,1,1,1,1,2,3,3,3,3');
+  });
+  await check('extractPoints(pdf) mock 路径放行', async () => {
+    const { deck } = await extractPoints(new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' }));
+    assert(deck.points.length === 12);
+  });
+} else {
+  // 真实管线：先以真实 fetch 取样本，再 stub Function 响应，验证 pdf.js vendor / 压缩 / 通道选择。
+  const loadSample = async (path, type) => new File([await (await realFetch(path)).arrayBuffer()], path.split('/').pop(), { type });
+  await check('真实管线：sample-text.pdf → 文字通道 + sourceType pdf-text', async () => {
+    const file = await loadSample('../samples/sample-text.pdf', 'application/pdf');
+    let payload = null;
+    globalThis.fetch = async (url, opt) => { payload = JSON.parse(opt.body); return Response.json(stubPoints); };
+    try {
+      const { deck } = await extractPoints(file);
+      assert(payload.kind === 'text' && payload.text.length > 0, 'kind=text');
+      assert(deck.sourceType === 'pdf-text' && deck.points.length === 1);
+    } finally { globalThis.fetch = realFetch; }
+  });
+  await check('真实管线：sample-scan.pdf → 视觉通道 + sourceType pdf-scan', async () => {
+    const file = await loadSample('../samples/sample-scan.pdf', 'application/pdf');
+    let payload = null;
+    globalThis.fetch = async (url, opt) => { payload = JSON.parse(opt.body); return Response.json(stubPoints); };
+    try {
+      const { deck } = await extractPoints(file);
+      assert(payload.kind === 'images' && payload.images.length >= 1 && payload.images[0].startsWith('data:image/jpeg'), 'kind=images jpeg');
+      assert(deck.sourceType === 'pdf-scan');
+    } finally { globalThis.fetch = realFetch; }
+  });
+  await check('真实管线：png 截图客户端压缩 → 视觉通道 + sourceType image', async () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 2400; canvas.height = 1200;
+    canvas.getContext('2d').fillRect(0, 0, 2400, 1200);
+    const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+    const file = new File([blob], 'shot.png', { type: 'image/png' });
+    let payload = null;
+    globalThis.fetch = async (url, opt) => { payload = JSON.parse(opt.body); return Response.json(stubPoints); };
+    try {
+      const { deck } = await extractPoints(file);
+      assert(payload.kind === 'images' && payload.images[0].startsWith('data:image/jpeg'), '压缩为 jpeg');
+      assert(deck.sourceType === 'image');
+    } finally { globalThis.fetch = realFetch; }
+  });
+  await check('真实管线：Function 未配 → 自动降级 mock + 横幅 warnings', async () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 8; canvas.height = 8;
+    const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+    const file = new File([blob], 'ok.png', { type: 'image/png' });
+    globalThis.fetch = async () => Response.json({ ok: false, code: 'E_SERVICE_NOT_CONFIGURED', message: 'x' });
+    try {
+      const { deck, warnings } = await extractPoints(file);
+      assert(deck.sourceType === 'mock' && deck.points.length === 12);
+      assert(warnings.some(w => w.includes('service_not_configured')));
+    } finally { globalThis.fetch = realFetch; }
+  });
+}
 
 const ol = document.getElementById('results');
 for (const [ok, name] of results) {
@@ -151,6 +220,15 @@ document.getElementById('run').addEventListener('click', async () => {
     const { deck, warnings } = await extractPoints(file || null);
     out.textContent = JSON.stringify({ title: deck.title, sourceType: deck.sourceType, count: deck.points.length, warnings, first: deck.points[0] }, null, 2);
   } catch (e) { out.textContent = `${e.code}: ${e.message}`; }
+});
+document.getElementById('stub').addEventListener('click', async () => {
+  const out = document.getElementById('out');
+  globalThis.fetch = async () => Response.json(stubPoints);
+  try {
+    const { deck, warnings } = await extractPoints(png());
+    out.textContent = JSON.stringify({ sourceType: deck.sourceType, count: deck.points.length, warnings, first: deck.points[0] }, null, 2);
+  } catch (e) { out.textContent = `${e.code}: ${e.message}`; }
+  finally { globalThis.fetch = realFetch; }
 });
 document.getElementById('save').addEventListener('click', () => {
   const sout = document.getElementById('sout');

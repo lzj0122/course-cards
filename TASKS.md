@@ -32,6 +32,8 @@
 - 截止 **2026-11-30 18:00**；M3 部署不晚于 11-27，留 3 天缓冲。
 
 ## 当前状态（2026-11-19）
-- PR #1/#2/#3 均已 squash 合并（main = acc59b0）：设计/鉴定、契约 v1.1 + A 侧 api/storage/fixture/自检、B 侧清单 UI。M1-0…M1-3 完成。
-- M1-4 进行中：feat/m1-integrate（PR #4）。用户 11-19 授权 A 代闭环（D017）：文档走查 + list.js 接 extractPoints + ContractError→#upload-error（§5）+ ?mock=1 全链路 + 360/375 模拟器走查；待搭档评审 approve 后 squash。
-- 在册承诺：M2 loadDeck 形状校验；M4 删除动画（D016）；M3 pdf.js vendor + 真实管线 + Function/Secret + 部署（≤11-27）。
+- M1 全闭环：PR #1–#4 均 squash 合并（main = 38fac84）。M1-0…M1-4 完成。
+- 第四步（真实链路，D019）进行中：A 侧 feat/m3-real-A 已完成 vendor pdf.js + api.js 真实管线（压缩/逐页/两通道/JSON/重试1/错误映射/降级/mock 兜底）+ functions/（DashScope-Qwen）+ 自检 41 断言 + dev 双模式；待开 PR 交 B 评审。
+- 第四步 B 侧待办：list.js 接 saveDeck/loadDeck（刷新仍在）+ index.html 加 #clear-data-btn（清空彻底）+ 真实截图/两种 PDF 各测 3 次 + 375px；提 PR 由 A review 后合并。
+- 部署/密钥待用户动作：prepare_site 授权 + Functions 就绪后 Owner 在 Portal 录 APP_API_KEY + 发布（≤11-27）；录密钥前真实请求自动降级 mock。
+- 在册承诺：M2 loadDeck 形状校验 + 闪卡/错题本/统计；M4 删除动画（D016）；warnings 披露 UI 随 M3（PR #4 备注 1）。

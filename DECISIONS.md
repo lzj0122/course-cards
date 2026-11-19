@@ -19,3 +19,5 @@
 | D015 | 11-18 | 契约 v1.1：Point 可选 `page?: number`（≥1 整数）；mock 页码 p01–p07→1、p08→2、p09–p12→3；分组有 page 升序／无 page 扁平／混合未标注页置末 | PR #2 评审异议 1、用户已确认；加性可选字段故 schemaVersion=1 与 key .v1 不变、旧数据兼容；B 兼容式分组零改动 |
 | D016 | 11-18 | 删除动画走 M4 补齐路线（coral 闪 + 240ms 高度 collapse，DESIGN §5.3，含 reduced-motion 退化），不修订 DESIGN | 搭档 PR #3 评论选定（不动已 approve 的 diff、DESIGN 保持权威）；用户 11-19 知悉 |
 | D017 | 11-19 | M1-4 由 A 代闭环（含 list.js 接线：extractPoints 全链路 + ContractError→#upload-error 按 §5），规格 = 搭档 PR #3 承诺；B 以 PR #4 评审把关 | 用户 11-19 明确授权（搭档会话空闲）；D013 并行边界不变，集成分支例外仅此次授权范围 |
+| D018 | 11-19 | 关闭 D007 遗留：DESIGN §1.2 酸绿按钮白字表述已由搭档修复（PR #1），以 §1.4 ink-900 为准的结论不变 | 搭档 PR #4 评审备注 4 指出关闭条目缺失；只增规则补本条 |
+| D019 | 11-19 | 第四步五项确认：① 维持 D006 逐页管线（不采纳「前3页渲染」）；② deck 持久化提前自 M2（extract 后 saveDeck + 启动 loadDeck，B 接线）；③ 新增「清空学习数据」按钮 #clear-data-btn（B，接 clearAll + 二次确认）；④ 沿用方案 a，APP_API_KEY 由 Owner 在 Portal 录入；⑤ 上游 = DashScope/Qwen（qwen-plus 文本 / qwen-vl-max 视觉）。加性：客户端压缩 ≤1600px JPEG0.8、失败自动重试 1 次（仅 E_NETWORK/E_UPSTREAM） | 用户 11-19 AskUserQuestion 逐项确认；契约 v1.2 走 PR 交 B 评审确认（D008）；D013/D014 边界不变 |
