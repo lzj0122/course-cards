@@ -1,8 +1,9 @@
 // js/list.js — M1 清单视图（B 侧；M1-4 集成接线由 A 按 D017 授权完成）
 // 契约：CONTRACT.md v1.1 §2/§3/§5/§6；视觉：DESIGN.md v1.0
 // 边界（D013）：不改 js/api.js / js/storage.js / data/mock-points.js；提取统一经 extractPoints（M1 mock-first）。
+// 持久化（D018）：saveDeck/loadDeck 提前到 step 4 接通；clearAll 验收走 dev/list-test.html，产品 UI 不加入口。
 import { extractPoints, ContractError } from './api.js';
-import { loadPrefs, savePrefs } from './storage.js'; // 契约 §2 只调用不修改
+import { loadDeck, saveDeck, loadPrefs, savePrefs } from './storage.js'; // 契约 §2 只调用不修改；deck 持久化 D018
 
 const $ = (id) => document.getElementById(id);
 const root = $('point-list');
@@ -26,7 +27,8 @@ const aaToggle = $('large-text-toggle');
 
 const mockMode = new URLSearchParams(location.search).get('mock') === '1';
 
-let working = [];          // 内存工作副本（编辑/删除/撤销），不写 storage（M2 接 saveDeck）
+let working = [];          // 内存工作副本（编辑/删除/撤销）
+let currentDeck = null;    // deck 元信息 + points；持久化经 storage.saveDeck（D018 提前到 step 4）
 let selected = new Set();
 let editingId = null;
 let lastFile = null;
@@ -156,27 +158,42 @@ function setState(s) {
 const STAGES = [['读取课件…', 20], ['识别内容…', 55], ['提取考点…', 85]];
 const MOCK_FILE = () => new File([], '示例课件.png', { type: 'image/png' });
 
+// deck 持久化（D018）：写失败按 §5 E_STORAGE_QUOTA → toast，清单仍可用
+function persist() {
+  if (!currentDeck) return;
+  try {
+    saveDeck({ ...currentDeck, points: working });
+  } catch (err) {
+    toast(err.message || '本地存储写入失败，请清理空间后重试。', 'error');
+  }
+}
+
 async function runExtract(file) {
   if (busy) return;
   busy = true;
   setState('loading');
-  for (const [text, p] of STAGES) {
-    stageText.textContent = text;
-    progressFill.style.width = `${p}%`;
-    progressEl.setAttribute('aria-valuenow', String(p));
-    await sleep(320);
-  }
-  progressFill.style.width = '100%';
-  progressEl.setAttribute('aria-valuenow', '100');
-  await sleep(200);
+  // 阶段动画与真实请求并行：loading 时长反映真实耗时（mock 即时返回时保底动画时长）
+  const stages = (async () => {
+    for (const [text, p] of STAGES) {
+      stageText.textContent = text;
+      progressFill.style.width = `${p}%`;
+      progressEl.setAttribute('aria-valuenow', String(p));
+      await sleep(320);
+    }
+    progressFill.style.width = '100%';
+    progressEl.setAttribute('aria-valuenow', '100');
+    await sleep(200);
+  })();
   try {
-    const { deck } = await extractPoints(file); // mock 路径忽略文件内容（契约 §6）
+    const [{ deck }] = await Promise.all([extractPoints(file), stages]); // mock 路径忽略文件内容（契约 §6）
     working = deck.points;
+    currentDeck = deck;
     selected.clear();
     editingId = null;
     renderPoints(working, root);
     setState(working.length ? 'success' : 'empty');
     mockBanner.hidden = deck.sourceType !== 'mock';
+    persist();
     toast(`已提取 ${working.length} 个考点`, 'success');
   } catch (err) {
     uploadError.dataset.code = err instanceof ContractError ? err.code : 'E_NETWORK';
@@ -290,6 +307,7 @@ function saveEdit(id) {
   root.dispatchEvent(new CustomEvent('point-edit', { bubbles: true, detail: { id, question: q, answer: a } }));
   editingId = null;
   renderPoints(working, root);
+  persist();
   toast(`考点 ${numOf(id)} 已更新`, 'success');
 }
 
@@ -305,12 +323,14 @@ function doDelete(id) {
     root.dispatchEvent(new CustomEvent('point-delete', { bubbles: true, detail: { id } }));
     renderPoints(working, root);
     setState(working.length ? 'success' : 'empty');
+    persist();
     toast(`已删除考点 ${num}`, 'info', {
       label: '撤销',
       onAction: () => {
         working.splice(Math.min(idx, working.length), 0, removed);
         renderPoints(working, root);
         setState('success');
+        persist();
         toast(`考点 ${num} 已恢复`, 'success');
       }
     });
@@ -375,5 +395,15 @@ if (mockMode) {
   mockBanner.hidden = false;
   useMockBtn.hidden = false;
 }
-setState('idle');
-renderPoints(working, root);
+// 刷新恢复（D018）：有已存 deck 直接进 success/empty，横幅随 sourceType 如实披露
+const saved = loadDeck();
+if (saved && Array.isArray(saved.points)) {
+  currentDeck = saved;
+  working = saved.points;
+  renderPoints(working, root);
+  setState(working.length ? 'success' : 'empty');
+  mockBanner.hidden = saved.sourceType !== 'mock';
+} else {
+  setState('idle');
+  renderPoints(working, root);
+}

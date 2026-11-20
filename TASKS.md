@@ -30,9 +30,8 @@
 - 比赛材料：README 演示说明、截图 — B
 - 截止 **2026-11-30 18:00**；M3 部署不晚于 11-27，留 3 天缓冲。
 
-## 当前状态（2026-11-20）
-- M1 全闭环：PR #1–#4 均 squash 合并（main = 38fac84）。M1-0…M1-4 完成。
-- 第四步（真实链路，D019）进行中：A 侧 feat/m3-real-A = vendor pdf.js + api.js 真实管线（压缩/逐页/两通道/JSON/重试1/错误映射/降级/mock 兜底）+ functions/（DashScope-Qwen）+ 自检 42 断言 + dev 双模式（?mock=1 15、非 mock 16）。PR #6 已开，B 复评异议 3–6 已回应（D023：404/非 JSON → 降级示例+横幅；文档恢复/只增不改）；待 B 复评 + 用户指示 approve 后 squash。
-- 第四步 B 侧：PR #7 已开（五态接真实请求 + deck 持久化 + D022 视觉模型 qwen3-vl-plus + 公网实测证据 step4-runtime-evidence.md，9/9）；合并顺序 #6 先、#7 后（用户 11-20 确认），B rebase 去重 D020 行后由 A review 再 squash。
+## 当前状态（2026-11-21）
+- M1 全闭环：PR #1–#4 均 squash 合并。第四步 A 侧 PR #6 已 squash 合并（main = 2c35adc，含 D023–D026；B 正式 APPROVE 5995379539，用户批准 D026①）。
+- 第四步 B 侧 PR #7 rebase 完成（onto 2c35adc：去重 D020、CONTRACT 收敛 v1.2+修订–修订4、D022 留痕、D026 归属收敛）；待 A review → squash #7。B 侧实测证据 verify/step4-runtime-evidence.md（测试站 9/9 等，仓库外）。
 - 部署/密钥：APP_API_KEY 已由 Owner 录入并 synced，descriptor 已写、canPublish=true。**官方站点 published=false / hasPublishedContent=false / private（2026-11-20 复核），从未发布**；B 的 9/9 实测在其自建测试站（siteId 01a1f442-2db5-7717-8bfc-0f51984ce1f7 / course-cards-k1u1a0c18dv.qoder.zone，public 仅供实测、非官方上线，D025）；官方首次发布 = M3（≤11-27、M2 完成 + #6/#7 合并后从 main）+ B 补测官方站 9/9 更新证据；**发布执行 = Owner/A（用户 11-20 裁决 D026），B 仅补测、不授权管理官方站**。录密钥前真实请求自动降级 mock。
 - 在册承诺：M2 loadDeck 形状校验 + 闪卡/错题本/统计；M4 删除动画（D016）；warnings 披露 UI 随 M3（PR #4 备注 1）。

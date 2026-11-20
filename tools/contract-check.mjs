@@ -122,7 +122,7 @@ h = createHandler({ getSecret: () => 'TEST_KEY', fetchImpl: async (url, opt) => 
 await (await h(mkReq({ kind: 'text', text: 't' }))).json();
 ok('文本通道用 qwen-plus', seenModel === 'qwen-plus');
 await (await h(mkReq({ kind: 'images', images: ['data:image/jpeg;base64,x'] }))).json();
-ok('视觉通道用 qwen-vl-max', seenModel === 'qwen-vl-max');
+ok('视觉通道用 qwen3-vl-plus（D022）', seenModel === 'qwen3-vl-plus');
 
 h = createHandler({ getSecret: () => 'TEST_KEY', fetchImpl: upstreamOk('[]') });
 r = await (await h(mkReq({ kind: 'text', text: 't' }))).json();

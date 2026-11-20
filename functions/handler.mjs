@@ -1,9 +1,9 @@
 // Qoder Sites Edge Function /extract（方案 a，D001/D019）。
 // 密钥仅服务端 Secret（Deno.env.get('APP_API_KEY')）；未配返回 E_SERVICE_NOT_CONFIGURED。
-// 上游固定 DashScope OpenAI 兼容端点；文本 qwen-plus、视觉 qwen-vl-max。不回传密钥/原始上游异常。
+// 上游固定 DashScope OpenAI 兼容端点；文本 qwen-plus、视觉 qwen3-vl-plus（D022）。不回传密钥/原始上游异常。
 const UPSTREAM = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
 const MODEL_TEXT = 'qwen-plus';
-const MODEL_VISION = 'qwen-vl-max';
+const MODEL_VISION = 'qwen3-vl-plus'; // D022：qwen-vl-max 已被上游下线（公告 118177）
 const TIMEOUT_MS = 60000;
 const MAX_IMAGES = 30;
 const MAX_TEXT_CHARS = 200000;

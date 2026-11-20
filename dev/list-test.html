@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M1/step-4 B 侧持久化与清空验收（dev）</title>
+<style>
+  body { font: 16px/1.6 system-ui, "PingFang SC", "Microsoft YaHei", sans-serif; margin: 0 auto; max-width: 760px; padding: 24px 16px; color: #1c1917; background: #faf7f0; }
+  h1 { font-size: 22px; }
+  li.pass { color: #166534; } li.fail { color: #b91c1c; font-weight: 700; }
+  iframe { border: 2px solid #4338ca; border-radius: 8px; display: block; margin: 16px 0; }
+  #summary { font-weight: 700; }
+  p.note { color: #57534e; font-size: 14px; }
+</style>
+</head>
+<body>
+<h1>B 侧验收：刷新持久化 / 清空彻底 / 375px（dev 页，非产品 UI）</h1>
+<p class="note">D018：clearAll 验收入口在本页，产品 UI 不加入口、契约 §3 id 零新增。经本地 HTTP 服务打开（ES Modules）。iframe 与本页同源，直接驱动产品页做端到端断言。</p>
+<ol id="results"></ol>
+<p id="summary">运行中…</p>
+<iframe id="f" src="/index.html?mock=1" width="375" height="720"></iframe>
+
+<script type="module">
+import * as storage from '../js/storage.js';
+
+const results = [];
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function check(name, fn) {
+  try { await fn(); results.push([true, name]); }
+  catch (e) { results.push([false, `${name} → ${e && e.message}`]); }
+}
+const assert = (c, m) => { if (!c) throw new Error(m || '断言失败'); };
+const f = document.getElementById('f');
+const doc = () => f.contentDocument;
+const win = () => f.contentWindow;
+const rows = () => doc().querySelectorAll('.point-row').length;
+async function waitRows(n, ms = 6000) {
+  for (let i = 0; i < ms / 100; i++) { if (rows() === n) return; await sleep(100); }
+  throw new Error(`等待 ${n} 行超时，实际 ${rows()}`);
+}
+async function reload() {
+  win().location.reload();
+  await sleep(900);
+}
+const ls = () => win().localStorage;
+
+await sleep(700);
+await check('提取后 deck 落盘（12 条、schemaVersion 1）', async () => {
+  doc().getElementById('use-mock-btn').click();
+  await waitRows(12);
+  const d = JSON.parse(ls().getItem('studyDeck.deck.v1'));
+  assert(d && d.points.length === 12 && d.schemaVersion === 1, 'deck key');
+});
+await check('刷新后清单自动恢复（无需再点示例）+ 横幅如实披露', async () => {
+  await reload();
+  assert(rows() === 12, `rows=${rows()}`);
+  assert(!doc().getElementById('mock-banner').hidden, 'banner');
+  assert(doc().getElementById('extract-status').hidden, '非 loading');
+});
+await check('编辑持久化：改 p02 问题后刷新仍在', async () => {
+  doc().querySelector('.point-row[data-id="p02"] .row-edit').click();
+  await sleep(150);
+  doc().querySelector('.edit-q').value = '持久化编辑？';
+  doc().querySelector('.edit-save').click();
+  await sleep(250);
+  await reload();
+  assert(doc().querySelector('.point-row[data-id="p02"] .row-question').textContent === '持久化编辑？', '编辑未落盘');
+});
+await check('删除持久化：删 p01 后刷新 11 行', async () => {
+  doc().querySelector('.point-row[data-id="p01"] .row-delete').click();
+  await sleep(450);
+  await reload();
+  assert(rows() === 11 && !doc().querySelector('.point-row[data-id="p01"]'), `rows=${rows()}`);
+});
+await check('写失败（quota）→ error toast 且清单仍可用；撤销恢复落盘', async () => {
+  const orig = win().Storage.prototype.setItem;
+  win().Storage.prototype.setItem = () => { throw new DOMException('quota', 'QuotaExceededError'); };
+  doc().querySelector('.point-row[data-id="p02"] .row-delete').click();
+  await sleep(450);
+  win().Storage.prototype.setItem = orig;
+  assert(rows() === 10, `rows=${rows()}`);
+  assert(!!doc().querySelector('.toast-error'), '缺 quota toast');
+  const undo = [...doc().querySelectorAll('.toast-action')].find((b) => b.textContent === '撤销');
+  assert(undo, '缺撤销');
+  undo.click();
+  await sleep(250);
+  await reload();
+  assert(rows() === 11, `撤销未落盘 rows=${rows()}`);
+});
+await check('大字 prefs 跨刷新恢复', async () => {
+  doc().getElementById('large-text-toggle').click();
+  await sleep(150);
+  await reload();
+  assert(doc().documentElement.classList.contains('large-text'), 'class 未恢复');
+  assert(doc().getElementById('large-text-toggle').getAttribute('aria-pressed') === 'true', 'aria');
+  doc().getElementById('large-text-toggle').click();
+  await sleep(150);
+});
+await check('375px 恢复态零横向溢出', async () => {
+  const de = doc().documentElement;
+  assert(de.scrollWidth <= de.clientWidth, `scrollWidth=${de.scrollWidth}`);
+});
+await check('clearAll 只清三 key、不动他站数据；清空后刷新回 idle', async () => {
+  ls().setItem('studyDeck.dev.unrelated', '1');
+  storage.clearAll();
+  assert(ls().getItem('studyDeck.deck.v1') === null, 'deck 未清');
+  assert(ls().getItem('studyDeck.progress.v1') === null, 'progress 未清');
+  assert(ls().getItem('studyDeck.prefs.v1') === null, 'prefs 未清');
+  assert(ls().getItem('studyDeck.dev.unrelated') === '1', '误清他站数据');
+  await reload();
+  assert(rows() === 0 && doc().querySelector('.list-section').hidden, '清空后未回 idle');
+  ls().removeItem('studyDeck.dev.unrelated');
+});
+
+const ol = document.getElementById('results');
+for (const [ok, name] of results) {
+  const li = document.createElement('li');
+  li.className = ok ? 'pass' : 'fail';
+  li.textContent = `${ok ? 'PASS' : 'FAIL'} ${name}`;
+  ol.appendChild(li);
+  console[ok ? 'log' : 'error'](li.textContent);
+}
+const passed = results.filter((r) => r[0]).length;
+document.getElementById('summary').textContent = `${passed}/${results.length} 通过`;
+window.__done = true;
+</script>
+</body>
+</html>
