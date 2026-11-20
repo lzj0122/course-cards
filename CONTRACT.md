@@ -160,7 +160,7 @@ export function mockDeck() { /* StudyDeck，deckId "d-mock"，sourceType 'mock'�
 
 - A：mock 路径端到端（?mock=1 → 使用示例课件 → 12 行清单）；storage 三 key 读写/损坏防御/quota 抛错；错误码表全覆盖 + 真实链路 fetch-stub（解析/重试1/降级/错误映射/Function handler 逻辑）自检 `node tools/contract-check.mjs`（42 断言、可复跑）+ dev/api-test.html 双模式浏览器断言（?mock=1 15、非 mock 16；非 mock 用 `python tools/serve.py` 修正 .mjs MIME）。
 - B：清单 UI 全状态（默认/hover/编辑/删除+撤销/空态）；大字开关持久化；360px 宽无横向滚动；renderPoints 事件契约符合 §2；page 分组实测（有 page 分组／无 page 扁平／混合未标注页置末）。
-- step-4（v1.2，D019/D020/D021，恢复自 42f0b42 误删）：真实截图 + 文字 PDF + 扫描 PDF 各 3 次（9/9）；刷新后清单恢复（loadDeck）；clearAll 彻底（B dev/list-test.html：只清三 key、不动他站数据、清空后回 idle）；375px 及 360px × 常规/大字四组零溢出；console 零消息。B 实测证据见 step4-runtime-evidence.md（PR #7）；9/9 实测环境 = B 自建测试站（siteId 01a1f442-2db5-7717-8bfc-0f51984ce1f7 / course-cards-k1u1a0c18dv.qoder.zone，public 仅供实测、非官方上线，D025）；官方站 9/9 补测随 M3 首次发布（≤11-27，M2 完成 + 合并后从 main）并更新证据（D024 兜底沿用）。
+- step-4（v1.2，D019/D020/D021，恢复自 42f0b42 误删）：真实截图 + 文字 PDF + 扫描 PDF 各 3 次（9/9）；刷新后清单恢复（loadDeck）；clearAll 彻底（B dev/list-test.html：只清三 key、不动他站数据、清空后回 idle）；375px 及 360px × 常规/大字四组零溢出；console 零消息。B 实测证据见 step4-runtime-evidence.md（**仓库外、不入 git**；摘要见 PR #7 正文 / issue #5）；9/9 实测环境 = B 自建测试站（siteId 01a1f442-2db5-7717-8bfc-0f51984ce1f7 / course-cards-k1u1a0c18dv.qoder.zone，public 仅供实测、非官方上线，D025）；官方站 9/9 补测随 M3 首次发布（≤11-27，M2 完成 + 合并后从 main）并更新证据（D024 兜底沿用）。
 - 双方：CONTRACT 字段零私自改动；异议都在 PR 讨论留痕。
 
 ## 9. 变更记录
