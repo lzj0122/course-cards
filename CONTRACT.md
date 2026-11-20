@@ -152,7 +152,7 @@ export function mockDeck() { /* StudyDeck，deckId "d-mock"，sourceType 'mock'�
 - 成功：`{ok:true, points:[{question:string, answer:string}]}`（1–99 条；服务端不传 id）
 - 失败：`{ok:false, code:string, message:string}`（code 取 §5 表）
 - 密钥仅服务端 Secret（Deno.env.get），前端与仓库永不出现明文。
-- 上游（v1.2，D019）：固定 DashScope OpenAI 兼容端点 `https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions`；text 通道 qwen-plus、images 通道 qwen-vl-max；服务端超时 60s；不回传密钥/原始上游异常。
+- 上游（v1.2，D019）：固定 DashScope OpenAI 兼容端点 `https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions`；text 通道 qwen-plus、images 通道 qwen3-vl-plus（D022，上游公告 118177 下线 qwen-vl-max）；服务端超时 60s；不回传密钥/原始上游异常。
 - 部署：`prepare_site.secretNames=['APP_API_KEY']`；Functions 就绪后由 Owner 在 Portal Settings 录密钥并确认同步，再发布依赖版本（M3/第四步部署环节）。
 - 客户端降级（v1.2 修订，D023/异议 3）：ENDPOINT 返回 HTTP 404 或非 JSON 响应 → `E_SERVICE_NOT_CONFIGURED`（走既有自动降级示例+横幅，D004）；「已部署未录密钥」的服务端 `{ok:false,code:'E_SERVICE_NOT_CONFIGURED'}` JSON 路径不变；瞬态重试仍仅 E_NETWORK/E_UPSTREAM 1 次。
 
@@ -171,3 +171,4 @@ export function mockDeck() { /* StudyDeck，deckId "d-mock"，sourceType 'mock'�
 - v1.2 修订（11-20，PR #6 复评闭环，D023）：异议 3 §7 增 404/非 JSON → E_SERVICE_NOT_CONFIGURED 降级；异议 4 移除 DECISIONS D019 inline 注；异议 5 恢复 §8 step-4 验收条；异议 6 恢复 §2 编辑/删除持久化 step-4 时序；TASKS M2 移除已提前的 saveDeck 行；自检 41→42 断言、dev 非 mock 15→16（404 降级断言）。视觉模型 qwen3-vl-plus 修复随 PR #7（D022），本修订不改 handler。
 - v1.2 修订 2（11-20，D024）：§8 step-4 公网验收增证据溯源与发布后补测兜底；TASKS 部署行三态加性澄清（站点从未发布、private，2026-11-20 平台复核）。不改字段/schema/key。
 - v1.2 修订 3（11-20，D025）：§8 step-4 与 TASKS 归属措辞收敛——9/9 实测 = B 自建测试站（siteId 01a1f442-2db5-7717-8bfc-0f51984ce1f7 / course-cards-k1u1a0c18dv.qoder.zone，非官方上线）；官方站从未发布，官方首次发布 = M3（M2 完成 + 合并后从 main，≤11-27）+ 官方站补测 9/9。不改字段/schema/key。
+- v1.2 修订 4（11-21，#7 rebase 收敛，D022/D026）：§7 images 通道 qwen3-vl-plus（D022 修复随本 PR，handler 单行+头注释）；B 侧重复 v1.3 标签与 D020 重复行收敛至 A 谱系（同决策只留一条，#6 先 #7 后用户确认）；归属措辞维持修订 3 与 D026（官方首次发布执行 = Owner/A，B 仅补测官方站 9/9、不管理官方站）。不改字段/schema/key。
