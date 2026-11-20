@@ -18,7 +18,7 @@
 </head>
 <body>
 <h1>B 侧验收：3D 翻转 / 键盘 / 降级 / 375px（dev 页，非产品 UI）</h1>
-<p class="note">D027：B 先实现视图层，createDeck/renderDeck 接口为契约提案 v0.1（PR #8 待 A 确认）。本页 stub createDeck 仅 dev 用、非产品代码；视图零 storage 写入。560ms 依 D027 修订（DESIGN 原 520ms）。reduced-motion 以 CSSOM 断言（浏览器无法模拟 OS 偏好，如实披露）。</p>
+<p class="note">D028：B 先实现视图层，接口经 A PR #8 发布 CONTRACT v1.3 确认（B 提案 v0.1 收敛至 v1.3：current()/progress/末张循环、无 done 终态；#card-next-btn/#card-progress）。本页 stub createDeck 仅 dev 用、非产品代码；视图零 storage 写入。560ms 依 D028 修订（DESIGN 原 520ms）。reduced-motion 以 CSSOM 断言（浏览器无法模拟 OS 偏好，如实披露）。</p>
 <ol id="results"></ol>
 <p id="summary">运行中…</p>
 <div id="card-stage"></div>
@@ -27,15 +27,22 @@
 <script type="module">
 import { renderDeck } from '../js/deck-view.js';
 
-/* dev-only stub：模拟 A 的 js/deck.js createDeck（契约提案 v0.1），非产品实现 */
+/* dev-only stub：模拟 A 的 js/deck.js createDeck（CONTRACT v1.3 DeckState），非产品实现 */
 function stubCreateDeck(points) {
-  return {
-    points, total: points.length, index: 0, flipped: false,
-    get card() { return this.points[this.index] ?? null; },
-    get done() { return this.total > 0 && this.index >= this.total; },
-    flip() { if (!this.done) this.flipped = !this.flipped; },
-    next() { this.index = Math.min(this.index + 1, this.total); this.flipped = false; }
+  let index = 0, flipped = false;
+  const listeners = new Set();
+  const notify = () => { for (const fn of [...listeners]) fn(deck); };
+  const deck = {
+    get total() { return points.length; },
+    get index() { return index; },
+    get flipped() { return flipped; },
+    get progress() { return { current: index + 1, total: points.length }; },
+    current() { return points[index]; },
+    flip() { flipped = !flipped; notify(); },
+    next() { index = points.length ? (index + 1) % points.length : 0; flipped = false; notify(); },
+    subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
   };
+  return deck;
 }
 const PTS = [
   { id: 'p01', question: 'UDP 与 TCP 的核心区别？', answer: 'UDP 无连接、不可靠、低开销；TCP 面向连接、可靠传输。' },
@@ -69,8 +76,9 @@ await check('正面渲染 + 3D 结构（perspective/preserve-3d/backface）', as
   assert(getComputedStyle(card).transformStyle === 'preserve-3d', 'preserve-3d');
   assert(faces.length === 2 && [...faces].every((f) => getComputedStyle(f).backfaceVisibility === 'hidden'), 'backface');
   assert(getComputedStyle(faces[1]).transform.startsWith('matrix3d(-1'), 'back rotateY180');
+  assert(stage.querySelector('#card-progress') && stage.querySelector('#card-next-btn'), 'v1.3 激活 id 缺失');
 });
-await check('翻转时长 560ms（D027）', async () => {
+await check('翻转时长 560ms（D028）', async () => {
   const d = getComputedStyle(stage.querySelector('#flip-card')).transitionDuration;
   assert(d.includes('0.56s'), `duration=${d}`);
 });
@@ -91,13 +99,13 @@ await check('键盘 Enter/Space 翻面', async () => {
   assert(card.classList.contains('flipped'), 'Space 应翻面');
 });
 await check('下一张门控（先想后看）+ 进度 + 事件', async () => {
-  const next = stage.querySelector('.card-next');
+  const next = stage.querySelector('#card-next-btn');
   assert(next.disabled === false, '翻面后应可用');
   next.click();
   await sleep(50);
   assert(deck.index === 1 && !deck.flipped, 'next 状态');
-  assert(stage.querySelector('.card-progress span').textContent === '第 2 / 3 张', 'progress');
-  assert(stage.querySelector('.card-next').disabled === true, '未翻面应禁用');
+  assert(stage.querySelector('#card-progress span').textContent === '第 2 / 3 张', 'progress');
+  assert(stage.querySelector('#card-next-btn').disabled === true, '未翻面应禁用');
   const flips = events.filter((e) => e[0] === 'flip');
   assert(flips.length === 3 && flips[0][1].index === 0 && flips[0][1].flipped === true, 'card-flip detail');
   assert(events.some((e) => e[0] === 'next' && e[1].index === 0), 'card-next detail');
@@ -105,17 +113,17 @@ await check('下一张门控（先想后看）+ 进度 + 事件', async () => {
 await check('视图零 storage 写入（不另存第二份）', async () => {
   assert(lsSnap() === lsBefore, 'storage 变化');
 });
-await check('遍历到完成 → 完成态', async () => {
-  for (let i = 0; i < 5 && !deck.done; i++) {
-    const card = stage.querySelector('#flip-card');
-    if (card && !deck.flipped) card.click();
+await check('末张循环回 0（v1.3 next 取模）+ 翻面复位', async () => {
+  const d3 = stubCreateDeck(PTS);
+  renderDeck(d3, stage);
+  for (let i = 0; i < 3; i++) {
+    stage.querySelector('#flip-card').click(); // 翻面 → next 解禁
     await sleep(30);
-    const next = stage.querySelector('.card-next');
-    if (next && !next.disabled) next.click();
+    stage.querySelector('#card-next-btn').click();
     await sleep(30);
   }
-  assert(deck.done, 'done');
-  assert(stage.querySelector('.card-done h3').textContent === '本轮 3 张已完成', 'done 文案');
+  assert(d3.index === 0 && !d3.flipped, `循环后 index=${d3.index} flipped=${d3.flipped}`);
+  assert(stage.querySelector('.card-tag').textContent === '问题 Q1', '末张应循环回 Q1');
 });
 await check('空 deck → 空态；M2 其余预留 id 零实现', async () => {
   renderDeck(stubCreateDeck([]), stage);
@@ -140,7 +148,7 @@ f.srcdoc = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
 <script type="module">
 import { renderDeck } from '../js/deck-view.js';
 const pts = [{ id: 'p01', question: ${JSON.stringify(longQ)}, answer: ${JSON.stringify(longA)} }];
-const deck = { points: pts, total: 1, index: 0, flipped: false, get card() { return pts[0]; }, get done() { return false; }, flip() { this.flipped = !this.flipped; }, next() {} };
+const deck = { total: 1, index: 0, flipped: false, get progress() { return { current: 1, total: 1 }; }, current() { return pts[0]; }, flip() { this.flipped = !this.flipped; }, next() {}, subscribe() { return () => {}; } };
 renderDeck(deck, document.getElementById('card-stage'));
 window.__ready = true;
 <\/script></body></html>`;

@@ -1,6 +1,6 @@
 /* ============================================================
    css/cards.css — M2 step-5 3D 翻转闪卡视图（B 侧）
-   视觉：DESIGN.md §5.2（560ms 依 D027 修订，原定稿 520ms）
+   视觉：DESIGN.md §5.2（560ms 依 D028 修订，原定稿 520ms；A #8 v1.3 确认）
    结构：.card-scene(perspective) > .card#flip-card(preserve-3d) > 正/背(backface-hidden)
    降级：prefers-reduced-motion → 150ms 淡入淡出（DESIGN §5.2）
    变量复用 list.css :root；独立加载时走 fallback（dev 验收页隔离）
@@ -21,7 +21,7 @@
 .card {
   display: grid;               /* 正背同格叠放 → 高度随内容自适应（大字/长答案不截断） */
   transform-style: preserve-3d;
-  transition: transform 560ms cubic-bezier(.2, .7, .2, 1);   /* D027：560ms */
+  transition: transform 560ms cubic-bezier(.2, .7, .2, 1);   /* D028：560ms（A #8 v1.3 确认） */
   cursor: pointer;
   border-radius: var(--radius-lg, 22px);
   -webkit-tap-highlight-color: transparent;
@@ -70,11 +70,11 @@ html.large-text .card-next { height: 64px; }
 
 .card:focus-visible, .card-next:focus-visible { outline: 2px solid var(--indigo-500, #6366F1); outline-offset: 2px; }
 
-/* 空 / 完成态（禁裸「暂无数据」，DESIGN §5.6） */
-.card-empty, .card-done { text-align: center; padding: var(--space-6, 32px) var(--space-4, 16px); color: var(--ink-700, #2E3560); }
-.card-empty svg, .card-done svg { width: 120px; height: 120px; }
-.card-empty h3, .card-done h3 { margin: var(--space-3, 12px) 0 var(--space-2, 8px); color: var(--ink-900, #1B1F3B); font-size: var(--text-xl, 1.375rem); }
-.card-empty p, .card-done p { margin: 0; font-size: var(--text-base, 1rem); }
+/* 空态（禁裸「暂无数据」，DESIGN §5.6）；v1.3 末张循环、无完成态 */
+.card-empty { text-align: center; padding: var(--space-6, 32px) var(--space-4, 16px); color: var(--ink-700, #2E3560); }
+.card-empty svg { width: 120px; height: 120px; }
+.card-empty h3 { margin: var(--space-3, 12px) 0 var(--space-2, 8px); color: var(--ink-900, #1B1F3B); font-size: var(--text-xl, 1.375rem); }
+.card-empty p { margin: 0; font-size: var(--text-base, 1rem); }
 
 /* 桌面内边距 32px（DESIGN §3） */
 @media (min-width: 1024px) {
