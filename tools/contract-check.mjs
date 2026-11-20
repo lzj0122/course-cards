@@ -58,5 +58,85 @@ localStorage.setItem('studyDeck.dev.unrelated', '1');
 storage.clearAll();
 ok('clearAll 只清三 key', localStorage.getItem('studyDeck.deck.v1') === null && localStorage.getItem('studyDeck.progress.v1') === null && localStorage.getItem('studyDeck.prefs.v1') === null && localStorage.getItem('studyDeck.dev.unrelated') === '1');
 
+// ---- 第四步：真实链路客户端（fetch-stub，不依赖 DOM）----
+import { requestPoints } from '../js/api.js';
+import { createHandler } from '../functions/handler.mjs';
+
+const realFetch = globalThis.fetch;
+const setFetch = (fn) => { globalThis.fetch = fn; };
+const okPoints = { ok: true, points: [{ question: ' q1 ', answer: ' a1 ' }, { question: 'q2', answer: 'a2' }] };
+
+setFetch(async () => Response.json(okPoints));
+const rp = await requestPoints({ kind: 'text', text: 't', fileName: 'f' }, 'pdf-text', ['w']);
+ok('requestPoints 解析+trim+id 赋值', rp.deck.points.map((p) => p.id).join() === 'p01,p02' && rp.deck.points[0].question === 'q1' && rp.deck.points[0].answer === 'a1');
+ok('requestPoints deck 形状/sourceType/warnings', rp.deck.schemaVersion === 1 && rp.deck.sourceType === 'pdf-text' && rp.deck.deckId.startsWith('d') && rp.warnings.join() === 'w');
+
+let calls = 0;
+setFetch(async () => { calls++; if (calls === 1) throw new TypeError('net'); return Response.json(okPoints); });
+const retried = await requestPoints({ kind: 'text', text: 't', fileName: 'f' }, 'pdf-text');
+ok('E_NETWORK 自动重试 1 次后成功', calls === 2 && retried.deck.points.length === 2);
+
+calls = 0;
+setFetch(async () => { calls++; throw new TypeError('net'); });
+ok('重试耗尽仍 E_NETWORK（共 2 次）', await codeOf(requestPoints({ kind: 'text', text: 't', fileName: 'f' }, 'pdf-text')) === 'E_NETWORK' && calls === 2);
+
+calls = 0;
+setFetch(async () => { calls++; return Response.json({ ok: false, code: 'E_EMPTY_POINTS', message: 'x' }); });
+ok('非瞬态错误不重试', await codeOf(requestPoints({ kind: 'text', text: 't', fileName: 'f' }, 'pdf-text')) === 'E_EMPTY_POINTS' && calls === 1);
+
+calls = 0;
+setFetch(async () => { calls++; return Response.json({ ok: false, code: 'E_SERVICE_NOT_CONFIGURED', message: 'x' }); });
+ok('service_not_configured 映射且不重试', await codeOf(requestPoints({ kind: 'text', text: 't', fileName: 'f' }, 'pdf-text')) === 'E_SERVICE_NOT_CONFIGURED' && calls === 1);
+
+setFetch(async () => Response.json({ ok: true, points: [{ question: '', answer: 'a' }] }));
+ok('空 question → E_INVALID_PAYLOAD', await codeOf(requestPoints({ kind: 'text', text: 't', fileName: 'f' }, 'pdf-text')) === 'E_INVALID_PAYLOAD');
+setFetch(async () => Response.json({ ok: true, points: [] }));
+ok('0 条 → E_EMPTY_POINTS', await codeOf(requestPoints({ kind: 'text', text: 't', fileName: 'f' }, 'pdf-text')) === 'E_EMPTY_POINTS');
+setFetch(async () => new Response('<html>'));
+ok('非 JSON 响应 → E_SERVICE_NOT_CONFIGURED（降级，D023）', await codeOf(requestPoints({ kind: 'text', text: 't', fileName: 'f' }, 'pdf-text')) === 'E_SERVICE_NOT_CONFIGURED');
+setFetch(async () => new Response('not found', { status: 404 }));
+ok('404 → E_SERVICE_NOT_CONFIGURED（降级，D023）', await codeOf(requestPoints({ kind: 'text', text: 't', fileName: 'f' }, 'pdf-text')) === 'E_SERVICE_NOT_CONFIGURED');
+setFetch(async () => Response.json({ ok: false, code: 'WEIRD', message: 'x' }));
+ok('未知 ok:false code → E_UPSTREAM', await codeOf(requestPoints({ kind: 'text', text: 't', fileName: 'f' }, 'pdf-text')) === 'E_UPSTREAM');
+setFetch(realFetch);
+
+// ---- 第四步：Function handler 逻辑（注入 getSecret/fetchImpl，无真实密钥）----
+const mkReq = (body, method = 'POST', path = '/functions/v1/app/extract') =>
+  new Request('http://local' + path, { method, body: method === 'POST' ? JSON.stringify(body) : undefined });
+const upstreamOk = (content) => async () => Response.json({ choices: [{ message: { content } }] });
+
+let h = createHandler({ getSecret: () => undefined, fetchImpl: upstreamOk('[]') });
+let r = await (await h(mkReq({ kind: 'text', text: 't' }))).json();
+ok('Function 未配密钥 → E_SERVICE_NOT_CONFIGURED', r.ok === false && r.code === 'E_SERVICE_NOT_CONFIGURED');
+
+h = createHandler({ getSecret: () => 'TEST_KEY', fetchImpl: upstreamOk('[{"question":"q","answer":"a"}]') });
+r = await (await h(mkReq({ kind: 'text', text: 't', fileName: 'f' }))).json();
+ok('Function 文本通道 ok:true + points', r.ok === true && r.points.length === 1 && r.points[0].question === 'q');
+
+h = createHandler({ getSecret: () => 'TEST_KEY', fetchImpl: upstreamOk('```json\n[{"question":"q","answer":"a"}]\n```') });
+r = await (await h(mkReq({ kind: 'text', text: 't' }))).json();
+ok('Function 剥离代码块解析', r.ok === true && r.points.length === 1);
+
+let seenModel = null;
+h = createHandler({ getSecret: () => 'TEST_KEY', fetchImpl: async (url, opt) => { seenModel = JSON.parse(opt.body).model; return Response.json({ choices: [{ message: { content: '[{"question":"q","answer":"a"}]' } }] }); } });
+await (await h(mkReq({ kind: 'text', text: 't' }))).json();
+ok('文本通道用 qwen-plus', seenModel === 'qwen-plus');
+await (await h(mkReq({ kind: 'images', images: ['data:image/jpeg;base64,x'] }))).json();
+ok('视觉通道用 qwen-vl-max', seenModel === 'qwen-vl-max');
+
+h = createHandler({ getSecret: () => 'TEST_KEY', fetchImpl: upstreamOk('[]') });
+r = await (await h(mkReq({ kind: 'text', text: 't' }))).json();
+ok('Function 0 条 → E_EMPTY_POINTS', r.ok === false && r.code === 'E_EMPTY_POINTS');
+
+h = createHandler({ getSecret: () => 'TEST_KEY', fetchImpl: async () => new Response('err', { status: 500 }) });
+r = await (await h(mkReq({ kind: 'text', text: 't' }))).json();
+ok('Function 上游非 200 → E_UPSTREAM', r.ok === false && r.code === 'E_UPSTREAM');
+
+h = createHandler({ getSecret: () => 'TEST_KEY', fetchImpl: upstreamOk('[]') });
+ok('Function GET → 405', (await h(mkReq({}, 'GET'))).status === 405);
+ok('Function 未知路径 → 404', (await h(mkReq({ kind: 'text', text: 't' }, 'POST', '/functions/v1/app/other'))).status === 404);
+r = await (await h(mkReq({ kind: 'bogus' }))).json();
+ok('Function kind 非法 → E_INVALID_PAYLOAD', r.ok === false && r.code === 'E_INVALID_PAYLOAD');
+
 console.log(`contract-check: ${pass} pass / ${fail} fail`);
 process.exit(fail ? 1 : 0);

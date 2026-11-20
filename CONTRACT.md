@@ -1,6 +1,6 @@
-# CONTRACT.md — M1 接口契约 v1.1
+# CONTRACT.md — 接口契约 v1.2
 
-> 状态：M1 已合并（PR #1/#2/#3）；M1-4 集成进行中（feat/m1-integrate）。**字段歧义先提异议、双方确认后才改**，变更记录进 DECISIONS.md。
+> 状态：M1 全闭环（PR #1–#4，main 38fac84）；第四步真实链路进行中（feat/m3-real-A）。**字段歧义先提异议、双方确认后才改**，变更记录进 DECISIONS.md。
 > 并行分工：A = `feat/m1-api-A`（js/api.js、js/storage.js、data/mock-points.js、tools/contract-check.mjs、dev/api-test.html）；B = `feat/m1-list-B`（index.html、js/list.js、css/list.css、上传区与清单 UI、样式、大字持久化）。B **不得修改** js/api.js / js/storage.js / data/mock-points.js。
 > 技术形态：纯静态 HTML + CSS + ES Modules，无构建步骤；pdf.js 以 vendor 本地文件引入（D012）。
 
@@ -52,10 +52,14 @@ type ProgressMap = { [pointId: string]: ProgressEntry };  // 缺省条目视为 
 extractPoints(file: File): Promise<{ deck: StudyDeck; warnings: string[] }>
 ```
 - 校验顺序：类型白名单（image/png、image/jpeg、application/pdf）→ 大小 ≤ 20MB → PDF 页数 ≤ 30；违反抛 ContractError（§5）。
-- 管线按 SAMPLE_REVIEW.md §2：逐页 getTextContent 去空白 < 50 判扫描页；文字页用 item.hasEOL 重建行；扫描页 canvas scale=2 → JPEG 0.8 dataURL；整份文本或逐页图 POST Function（§7）。
-- mock 路径（§6）：不读文件内容，直接返回 mockDeck()，warnings 含 "mock"。
+- 管线按 SAMPLE_REVIEW.md §2 / D006：逐页 getTextContent 去空白 < 50 判扫描页；文字页用 item.hasEOL 重建行；扫描页 canvas scale=2 → JPEG 0.8 dataURL；**多数页**决定通道（文字页≥扫描页→text，否则→images），混合时 warnings 注明（v1.2）。
+- 上传截图客户端压缩（v1.2，第四步加性）：最长边 ≤1600px、JPEG 0.8 dataURL 后送 images 通道。
+- 失败自动重试 1 次（v1.2，第四步加性）：仅 E_NETWORK / E_UPSTREAM 瞬态错误重试一次；其余错误码不重试直接抛。
+- mock 路径（§6）：不读文件内容，直接返回 mockDeck()，warnings 含 "mock"；node 自检无 location 时默认 mock 以保证可复跑（v1.2）。
 - Function 返回 E_SERVICE_NOT_CONFIGURED 时**自动降级 mock**，warnings 含 "service_not_configured"。
 - points 的 id 由前端按返回顺序赋 p01…；服务端不传 id。
+- deck 持久化（v1.2，第四步提前自 M2，D020）：B 在 list.js 接 `saveDeck`（提取/编辑/删除/撤销后）+ 启动 `loadDeck()` 恢复清单，保证刷新后数据仍在；M2 只做 ProgressMap/错题本/统计。A 不改 B 文件。
+- clearAll 验收入口 = B 的 `dev/list-test.html`（v1.2，D020/D021）：**产品 UI 不加清空按钮、§3 id 零新增**；断言清三 key、不动他站数据、清空后刷新回 idle。
 
 ```ts
 // js/list.js —— B 实现
@@ -63,7 +67,7 @@ renderPoints(points: Point[], root: HTMLElement): void
 ```
 - 全量替换 root 子节点；root 固定为 `#point-list`；行 UI 按 DESIGN.md §5.3（序号胶囊 + 问题文本 + 编辑/删除 ≥44px 热区）。
 - 分组按 §1 分组规则渲染（v1.1）；B 已兼容实现：有 page 自动分组、无 page 扁平降级。
-- 编辑/删除只发事件、不改 storage：root 上派发 `CustomEvent('point-edit', {detail:{id,question,answer}})`、`CustomEvent('point-delete', {detail:{id}})`；删除带 5s 撤销 toast（B 内部实现）。M1 内 A 不监听这两个事件（清单编辑的持久化在 M2 接 storage.saveDeck）。
+- 编辑/删除只发事件、不改 storage：root 上派发 `CustomEvent('point-edit', {detail:{id,question,answer}})`、`CustomEvent('point-delete', {detail:{id}})`；删除带 5s 撤销 toast（B 内部实现）。A 不监听这两个事件；编辑/删除后的落盘自第四步由 B 接 `storage.saveDeck`（D020，见本节 deck 持久化条）。
 - 空数组：渲染 DESIGN §5.6 空状态，不裸"暂无数据"。
 
 ```ts
@@ -148,14 +152,22 @@ export function mockDeck() { /* StudyDeck，deckId "d-mock"，sourceType 'mock'�
 - 成功：`{ok:true, points:[{question:string, answer:string}]}`（1–99 条；服务端不传 id）
 - 失败：`{ok:false, code:string, message:string}`（code 取 §5 表）
 - 密钥仅服务端 Secret（Deno.env.get），前端与仓库永不出现明文。
+- 上游（v1.2，D019）：固定 DashScope OpenAI 兼容端点 `https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions`；text 通道 qwen-plus、images 通道 qwen-vl-max；服务端超时 60s；不回传密钥/原始上游异常。
+- 部署：`prepare_site.secretNames=['APP_API_KEY']`；Functions 就绪后由 Owner 在 Portal Settings 录密钥并确认同步，再发布依赖版本（M3/第四步部署环节）。
+- 客户端降级（v1.2 修订，D023/异议 3）：ENDPOINT 返回 HTTP 404 或非 JSON 响应 → `E_SERVICE_NOT_CONFIGURED`（走既有自动降级示例+横幅，D004）；「已部署未录密钥」的服务端 `{ok:false,code:'E_SERVICE_NOT_CONFIGURED'}` JSON 路径不变；瞬态重试仍仅 E_NETWORK/E_UPSTREAM 1 次。
 
 ## 8. 验收（M1 合并门槛）
 
-- A：mock 路径端到端（?mock=1 → 使用示例课件 → 12 行清单）；storage 三 key 读写/损坏防御/quota 抛错；错误码表全覆盖自检 `node tools/contract-check.mjs`（已在仓库、可复跑）+ dev/api-test.html 浏览器断言。
+- A：mock 路径端到端（?mock=1 → 使用示例课件 → 12 行清单）；storage 三 key 读写/损坏防御/quota 抛错；错误码表全覆盖 + 真实链路 fetch-stub（解析/重试1/降级/错误映射/Function handler 逻辑）自检 `node tools/contract-check.mjs`（42 断言、可复跑）+ dev/api-test.html 双模式浏览器断言（?mock=1 15、非 mock 16；非 mock 用 `python tools/serve.py` 修正 .mjs MIME）。
 - B：清单 UI 全状态（默认/hover/编辑/删除+撤销/空态）；大字开关持久化；360px 宽无横向滚动；renderPoints 事件契约符合 §2；page 分组实测（有 page 分组／无 page 扁平／混合未标注页置末）。
+- step-4（v1.2，D019/D020/D021，恢复自 42f0b42 误删）：真实截图 + 文字 PDF + 扫描 PDF 各 3 次（9/9）；刷新后清单恢复（loadDeck）；clearAll 彻底（B dev/list-test.html：只清三 key、不动他站数据、清空后回 idle）；375px 及 360px × 常规/大字四组零溢出；console 零消息。B 实测证据见 step4-runtime-evidence.md（PR #7）；9/9 实测环境 = B 自建测试站（siteId 01a1f442-2db5-7717-8bfc-0f51984ce1f7 / course-cards-k1u1a0c18dv.qoder.zone，public 仅供实测、非官方上线，D025）；官方站 9/9 补测随 M3 首次发布（≤11-27，M2 完成 + 合并后从 main）并更新证据（D024 兜底沿用）。
 - 双方：CONTRACT 字段零私自改动；异议都在 PR 讨论留痕。
 
 ## 9. 变更记录
 
 - v1.0（11-18）：初版（PR #2）。
 - v1.1（11-18）：PR #2 评审异议 1（用户已确认）→ Point 增可选 `page?: number`、fixture 页码、分组规则（D015）；所有权表述同步 index.html 归 B（D014）；§8 自检脚本明确在仓库位置。加性可选字段：schemaVersion 仍 1、storage key .v1 不变，无 page 旧数据兼容扁平。
+- v1.2（11-19，第四步，用户确认 D019/D020/D021，待 B PR 评审确认）：真实管线落地（维持 D006 逐页，不采纳「前3页」）；加性客户端压缩（≤1600px JPEG0.8）与失败自动重试 1 次（仅瞬态）；多数页通道 + 混合 warnings；deck 持久化提前自 M2（B 接 saveDeck 提取/编辑/删除/撤销 + loadDeck init）；**clearAll 验收走 B dev/list-test.html、产品不加清空按钮、§3 零新增**（D021 推翻 D019③）；§7 上游 DashScope qwen-plus/qwen-vl-max + secretNames；node 自检默认 mock、dev 双模式 + tools/serve.py。schemaVersion 仍 1、key .v1 不变（无字段删改）。
+- v1.2 修订（11-20，PR #6 复评闭环，D023）：异议 3 §7 增 404/非 JSON → E_SERVICE_NOT_CONFIGURED 降级；异议 4 移除 DECISIONS D019 inline 注；异议 5 恢复 §8 step-4 验收条；异议 6 恢复 §2 编辑/删除持久化 step-4 时序；TASKS M2 移除已提前的 saveDeck 行；自检 41→42 断言、dev 非 mock 15→16（404 降级断言）。视觉模型 qwen3-vl-plus 修复随 PR #7（D022），本修订不改 handler。
+- v1.2 修订 2（11-20，D024）：§8 step-4 公网验收增证据溯源与发布后补测兜底；TASKS 部署行三态加性澄清（站点从未发布、private，2026-11-20 平台复核）。不改字段/schema/key。
+- v1.2 修订 3（11-20，D025）：§8 step-4 与 TASKS 归属措辞收敛——9/9 实测 = B 自建测试站（siteId 01a1f442-2db5-7717-8bfc-0f51984ce1f7 / course-cards-k1u1a0c18dv.qoder.zone，非官方上线）；官方站从未发布，官方首次发布 = M3（M2 完成 + 合并后从 main，≤11-27）+ 官方站补测 9/9。不改字段/schema/key。
