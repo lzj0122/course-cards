@@ -29,8 +29,30 @@ function write(key, value) {
   }
 }
 
+function isValidDeck(d) {
+  if (d.schemaVersion !== 1) return false;
+  if (typeof d.deckId !== 'string' || !d.deckId) return false;
+  if (typeof d.title !== 'string' || typeof d.createdAt !== 'string') return false;
+  if (!['image', 'pdf-text', 'pdf-scan', 'mock'].includes(d.sourceType)) return false;
+  if (!Array.isArray(d.points) || d.points.length < 1 || d.points.length > 99) return false;
+  const ids = new Set();
+  for (const p of d.points) {
+    if (!p || typeof p.id !== 'string' || !p.id || ids.has(p.id)) return false;
+    if (typeof p.question !== 'string' || !p.question.trim()) return false;
+    if (typeof p.answer !== 'string' || !p.answer.trim()) return false;
+    if (p.page !== undefined && (!Number.isInteger(p.page) || p.page < 1)) return false;
+    ids.add(p.id);
+  }
+  return true;
+}
+
 export function loadDeck() {
-  return read(KEYS.deck, null);
+  const deck = read(KEYS.deck, null);
+  if (deck !== null && !isValidDeck(deck)) {
+    console.warn('[storage] studyDeck.deck.v1 形状不合契约，已按 null 处理。');
+    return null;
+  }
+  return deck;
 }
 
 export function saveDeck(deck) {

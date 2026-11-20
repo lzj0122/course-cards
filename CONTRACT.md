@@ -1,6 +1,6 @@
-# CONTRACT.md — 接口契约 v1.2
+# CONTRACT.md — 接口契约 v1.3
 
-> 状态：M1 全闭环（PR #1–#4，main 38fac84）；第四步真实链路进行中（feat/m3-real-A）。**字段歧义先提异议、双方确认后才改**，变更记录进 DECISIONS.md。
+> 状态：M1 + 第四步全闭环（PR #1–#7，main 9037518）；第五步 M2 首切片进行中（feat/m2-deck-A）。**字段歧义先提异议、双方确认后才改**，变更记录进 DECISIONS.md。
 > 并行分工：A = `feat/m1-api-A`（js/api.js、js/storage.js、data/mock-points.js、tools/contract-check.mjs、dev/api-test.html）；B = `feat/m1-list-B`（index.html、js/list.js、css/list.css、上传区与清单 UI、样式、大字持久化）。B **不得修改** js/api.js / js/storage.js / data/mock-points.js。
 > 技术形态：纯静态 HTML + CSS + ES Modules，无构建步骤；pdf.js 以 vendor 本地文件引入（D012）。
 
@@ -58,7 +58,7 @@ extractPoints(file: File): Promise<{ deck: StudyDeck; warnings: string[] }>
 - mock 路径（§6）：不读文件内容，直接返回 mockDeck()，warnings 含 "mock"；node 自检无 location 时默认 mock 以保证可复跑（v1.2）。
 - Function 返回 E_SERVICE_NOT_CONFIGURED 时**自动降级 mock**，warnings 含 "service_not_configured"。
 - points 的 id 由前端按返回顺序赋 p01…；服务端不传 id。
-- deck 持久化（v1.2，第四步提前自 M2，D020）：B 在 list.js 接 `saveDeck`（提取/编辑/删除/撤销后）+ 启动 `loadDeck()` 恢复清单，保证刷新后数据仍在；M2 只做 ProgressMap/错题本/统计。A 不改 B 文件。
+- deck 持久化（v1.2，第四步提前自 M2，D020）：B 在 list.js 接 `saveDeck`（提取/编辑/删除/撤销后）+ 启动 `loadDeck()` 恢复清单，保证刷新后数据仍在；M2 第五步接卡片状态机（v1.3 §2 deck.js），自评 ProgressMap/错题本/统计后续切片。A 不改 B 文件。
 - clearAll 验收入口 = B 的 `dev/list-test.html`（v1.2，D020/D021）：**产品 UI 不加清空按钮、§3 id 零新增**；断言清三 key、不动他站数据、清空后刷新回 idle。
 
 ```ts
@@ -81,8 +81,29 @@ savePrefs(p: { largeText: boolean }): void
 clearAll(): void   // 清三个 key，不动其他站点数据
 ```
 - 读写均 JSON；损坏 JSON 视为 null/{} 并 console.warn，不抛错（边界防御仅此一处）。
+- loadDeck 形状校验（v1.3，第五步，D027）：schemaVersion=1、deckId/title/createdAt 字符串、sourceType 四值、points 1–99 且 id 非空唯一、question/answer 非空字符串、page 若存在为 ≥1 整数；不合 → null + console.warn（不抛错、不毁数据；200/2000 长度上限仅在提取/编辑时约束，load 不复核以免误毁旧数据）。
 - 写失败（QuotaExceededError 等）抛 ContractError E_STORAGE_QUOTA。
 - largeText 生效方式：`document.documentElement.classList.toggle('large-text', p.largeText)`（DESIGN §2.3，根字号 16→20px）。
+
+```ts
+// js/deck.js —— A 实现（v1.3，第五步）
+createDeck(points: Point[]): DeckState
+```
+- 卡片从 studyDeck.points 派生（`current()` 返回 points[index] 同引用），**仅内存状态、不另存第二份**（不写 storage）。
+- 空/非数组 points 抛 ContractError E_EMPTY_POINTS。
+- DeckState：`total`、`index`（0-based）、`flipped`、`progress:{current:index+1,total}`（只读 getter）；`current(): Point`；`flip(): void` 切换翻面；`next(): void` 推进、末张循环回 0、翻面复位 false；`subscribe(fn): ()=>void` 任何变更通知 fn(deck)，返回退订函数。
+- 自评/掌握状态不在此（ProgressMap §1，后续切片）。
+
+```ts
+// js/deck-view.js —— B 实现（v1.3，第五步；A 只定契约）
+renderDeck(deck: DeckState): void
+```
+- 入口：`#generate-deck-btn` 点击 → 以当前清单 points 调 createDeck 并 renderDeck；清单/卡片区切换由 B 在 index.html 组织。
+- `#card-stage` 内 `#flip-card`：正面 question、背面 answer（纯文本禁 HTML）；3D 翻转 perspective + preserve-3d + backface-visibility + rotateY(180deg)，**560ms** cubic-bezier(.2,.7,.2,1)（用户第五步明确，D027 覆盖 DESIGN §5.2 520ms，B 同步 DESIGN）；翻面中 scale 1.02 + shadow-2 落定回弹沿用 DESIGN。
+- 键盘：`#flip-card` 可聚焦（role=button/tabindex=0），Enter/Space 触发 deck.flip()；`#card-next-btn` → deck.next()；`#card-progress` 显示「current / total」。
+- 订阅 deck.subscribe 重渲染；自评按钮本步不实现（§3 仍预留），翻面前禁自评规则随自评切片。
+- `prefers-reduced-motion`：翻转退化为 150ms 淡入淡出（DESIGN §5.2）。
+- 375px 零横向溢出；大字随根字号；**不写 storage**（派生原则）。
 
 ## 3. DOM id（全局唯一；括号内为 owner）
 
@@ -104,7 +125,8 @@ M1 必须存在（index.html 由 B 提供与维护，D014；DOM id 表与 v1.0 �
 | `#generate-deck-btn` | 底部吸附栏「生成闪卡」主按钮 (B) |
 | `#toast-region` | toast 容器，aria-live=polite (B) |
 
-M2 预留（M1 不得实现、不得占用）：`#card-stage` `#flip-card` `#rate-remembered` `#rate-forgot` `#stats-accuracy` `#stats-mastered` `#mistake-book`。
+第五步激活（v1.3，B 实现）：`#card-stage`（卡片区根） `#flip-card`（翻转卡，可聚焦） `#card-next-btn`（下一张） `#card-progress`（「N / M」位置进度）。
+M2 后续预留（不得提前实现/占用）：`#rate-remembered` `#rate-forgot` `#stats-accuracy` `#stats-mastered` `#mistake-book`。
 
 ## 4. storage key（localStorage，前缀 studyDeck.）
 
@@ -158,9 +180,10 @@ export function mockDeck() { /* StudyDeck，deckId "d-mock"，sourceType 'mock'�
 
 ## 8. 验收（M1 合并门槛）
 
-- A：mock 路径端到端（?mock=1 → 使用示例课件 → 12 行清单）；storage 三 key 读写/损坏防御/quota 抛错；错误码表全覆盖 + 真实链路 fetch-stub（解析/重试1/降级/错误映射/Function handler 逻辑）自检 `node tools/contract-check.mjs`（42 断言、可复跑）+ dev/api-test.html 双模式浏览器断言（?mock=1 15、非 mock 16；非 mock 用 `python tools/serve.py` 修正 .mjs MIME）。
+- A：mock 路径端到端（?mock=1 → 使用示例课件 → 12 行清单）；storage 三 key 读写/损坏防御/quota 抛错；错误码表全覆盖 + 真实链路 fetch-stub（解析/重试1/降级/错误映射/Function handler 逻辑）自检 `node tools/contract-check.mjs`（58 断言、可复跑；v1.3 增 deck 状态机 8 + loadDeck 形状 8）+ dev/api-test.html 双模式浏览器断言（?mock=1 15、非 mock 16；非 mock 用 `python tools/serve.py` 修正 .mjs MIME）。
 - B：清单 UI 全状态（默认/hover/编辑/删除+撤销/空态）；大字开关持久化；360px 宽无横向滚动；renderPoints 事件契约符合 §2；page 分组实测（有 page 分组／无 page 扁平／混合未标注页置末）。
-- step-4（v1.2，D019/D020/D021，恢复自 42f0b42 误删）：真实截图 + 文字 PDF + 扫描 PDF 各 3 次（9/9）；刷新后清单恢复（loadDeck）；clearAll 彻底（B dev/list-test.html：只清三 key、不动他站数据、清空后回 idle）；375px 及 360px × 常规/大字四组零溢出；console 零消息。B 实测证据见 step4-runtime-evidence.md（PR #7）；9/9 实测环境 = B 自建测试站（siteId 01a1f442-2db5-7717-8bfc-0f51984ce1f7 / course-cards-k1u1a0c18dv.qoder.zone，public 仅供实测、非官方上线，D025）；官方站 9/9 补测随 M3 首次发布（≤11-27，M2 完成 + 合并后从 main）并更新证据（D024 兜底沿用）。
+- step-4（v1.2，D019/D020/D021，恢复自 42f0b42 误删）：真实截图 + 文字 PDF + 扫描 PDF 各 3 次（9/9）；刷新后清单恢复（loadDeck）；clearAll 彻底（B dev/list-test.html：只清三 key、不动他站数据、清空后回 idle）；375px 及 360px × 常规/大字四组零溢出；console 零消息。B 实测证据见 verify/step4-runtime-evidence.md（**仓库外**，摘要见 PR #7 正文/issue#5；#7 评审非阻塞收敛）；9/9 实测环境 = B 自建测试站（siteId 01a1f442-2db5-7717-8bfc-0f51984ce1f7 / course-cards-k1u1a0c18dv.qoder.zone，public 仅供实测、非官方上线，D025）；官方站 9/9 补测随 M3 首次发布（≤11-27，M2 完成 + 合并后从 main）并更新证据（D024 兜底沿用）。
+- step-5（v1.3，D027）：A = deck 状态机 + loadDeck 形状校验 16 断言（派生同引用/翻面/循环/订阅/零写入 + 形状七坏一好）；B = 3D 翻转 560ms、正反面、Enter/Space、reduced-motion 150ms 淡入淡出、375px 零溢出、loadDeck 恢复后进卡片区不丢数据；dev/list-test.html 页头 D018 误引收敛为 D020/D021（B）。
 - 双方：CONTRACT 字段零私自改动；异议都在 PR 讨论留痕。
 
 ## 9. 变更记录
@@ -172,3 +195,4 @@ export function mockDeck() { /* StudyDeck，deckId "d-mock"，sourceType 'mock'�
 - v1.2 修订 2（11-20，D024）：§8 step-4 公网验收增证据溯源与发布后补测兜底；TASKS 部署行三态加性澄清（站点从未发布、private，2026-11-20 平台复核）。不改字段/schema/key。
 - v1.2 修订 3（11-20，D025）：§8 step-4 与 TASKS 归属措辞收敛——9/9 实测 = B 自建测试站（siteId 01a1f442-2db5-7717-8bfc-0f51984ce1f7 / course-cards-k1u1a0c18dv.qoder.zone，非官方上线）；官方站从未发布，官方首次发布 = M3（M2 完成 + 合并后从 main，≤11-27）+ 官方站补测 9/9。不改字段/schema/key。
 - v1.2 修订 4（11-21，#7 rebase 收敛，D022/D026）：§7 images 通道 qwen3-vl-plus（D022 修复随本 PR，handler 单行+头注释；自检视觉断言同步，用户 11-21 授权 B 改 A 所有权工具单行，D017 式）；B 侧重复 v1.3 标签与 D020 重复行收敛至 A 谱系（同决策只留一条，#6 先 #7 后用户确认）；归属措辞维持修订 3 与 D026（官方首次发布执行 = Owner/A，B 仅补测官方站 9/9、不管理官方站）。不改字段/schema/key。
+- v1.3（11-21，第五步，D027）：§2 增 createDeck/renderDeck 契约（deck.js A / deck-view.js B；卡片派生不另存；560ms 覆盖 DESIGN §5.2 520ms）+ loadDeck 形状校验；§3 激活 #card-stage/#flip-card、新增 #card-next-btn/#card-progress，自评/统计 id 仍预留；§8 增 step-5 验收 + 证据指针仓库外收敛；自检 42→58。schemaVersion 仍 1、key .v1 不变（无字段删改）。

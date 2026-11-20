@@ -1,5 +1,6 @@
 // 用法：node tools/contract-check.mjs —— CONTRACT §8 A 侧自检，仓库内可复跑（PR #2 备注 1）
 import { extractPoints, ContractError } from '../js/api.js';
+import { createDeck } from '../js/deck.js';
 import * as storage from '../js/storage.js';
 import { mockDeck, MOCK_POINTS } from '../data/mock-points.js';
 
@@ -57,6 +58,39 @@ ok('写失败抛 E_STORAGE_QUOTA', quotaCode === 'E_STORAGE_QUOTA');
 localStorage.setItem('studyDeck.dev.unrelated', '1');
 storage.clearAll();
 ok('clearAll 只清三 key', localStorage.getItem('studyDeck.deck.v1') === null && localStorage.getItem('studyDeck.progress.v1') === null && localStorage.getItem('studyDeck.prefs.v1') === null && localStorage.getItem('studyDeck.dev.unrelated') === '1');
+
+// ---- 第五步：deck 状态机（v1.3 §2，派生自 points、不另存）----
+const dk = createDeck(MOCK_POINTS);
+ok('createDeck 派生 current/total/progress 且同引用', dk.current() === MOCK_POINTS[0] && dk.total === 12 && dk.progress.current === 1 && dk.progress.total === 12 && dk.index === 0 && dk.flipped === false);
+let notes = 0;
+const unsub = dk.subscribe(() => { notes++; });
+dk.flip();
+ok('flip() 切换翻面并通知', dk.flipped === true && notes === 1);
+dk.next();
+ok('next() 推进+翻面复位+progress', dk.index === 1 && dk.flipped === false && dk.progress.current === 2 && notes === 2);
+for (let i = 0; i < 11; i++) dk.next();
+ok('next() 末张循环回 0', dk.index === 0 && dk.current() === MOCK_POINTS[0]);
+const notesBeforeUnsub = notes;
+unsub();
+dk.flip();
+ok('unsubscribe 后不再通知', notes === notesBeforeUnsub);
+ok('空数组抛 E_EMPTY_POINTS', (() => { try { createDeck([]); return false; } catch (e) { return e.code === 'E_EMPTY_POINTS'; } })());
+ok('非数组抛 E_EMPTY_POINTS', (() => { try { createDeck(null); return false; } catch (e) { return e.code === 'E_EMPTY_POINTS'; } })());
+const sizeBefore = store.size;
+createDeck(MOCK_POINTS).next();
+ok('状态机零 storage 写入（不另存第二份）', store.size === sizeBefore);
+
+// ---- 第五步：loadDeck 形状校验（v1.3 §2，损坏→null+warn）----
+const badDeck = (mut) => { const d = structuredClone(mockDeck()); mut(d); localStorage.setItem('studyDeck.deck.v1', JSON.stringify(d)); return storage.loadDeck() === null; };
+ok('schemaVersion≠1 → null', badDeck((d) => { d.schemaVersion = 2; }));
+ok('points 非数组 → null', badDeck((d) => { d.points = 'x'; }));
+ok('points 0 条 → null', badDeck((d) => { d.points = []; }));
+ok('point 缺 answer → null', badDeck((d) => { delete d.points[0].answer; }));
+ok('id 重复 → null', badDeck((d) => { d.points[1].id = d.points[0].id; }));
+ok('page 非 ≥1 整数 → null', badDeck((d) => { d.points[0].page = 0; }));
+ok('deckId 缺失 → null', badDeck((d) => { delete d.deckId; }));
+storage.saveDeck(mockDeck());
+ok('合法 deck 形状校验通过往返', JSON.stringify(storage.loadDeck()) === JSON.stringify(mockDeck()));
 
 // ---- 第四步：真实链路客户端（fetch-stub，不依赖 DOM）----
 import { requestPoints } from '../js/api.js';
