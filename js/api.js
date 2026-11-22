@@ -11,6 +11,7 @@ const MESSAGES = {
   E_UPSTREAM: '识别服务出错，请稍后重试。',
   E_INVALID_PAYLOAD: '识别结果格式异常，请重试。',
   E_STORAGE_QUOTA: '本地存储空间不足，请清理后重试。',
+  E_NOT_FLIPPED: '请先翻面看答案，再评分。',
 };
 
 export class ContractError extends Error {

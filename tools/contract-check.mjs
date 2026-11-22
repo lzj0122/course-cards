@@ -172,5 +172,94 @@ ok('Function 未知路径 → 404', (await h(mkReq({ kind: 'text', text: 't' }, 
 r = await (await h(mkReq({ kind: 'bogus' }))).json();
 ok('Function kind 非法 → E_INVALID_PAYLOAD', r.ok === false && r.code === 'E_INVALID_PAYLOAD');
 
+// ---- 第六步：quiz 自测状态机（v1.4 §2，D030）----
+import { startQuiz, getBook, getStats } from '../js/quiz.js';
+storage.clearAll();
+const lcg = (seed) => () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+const playAll = (s, result = 'remembered') => {
+  const order = [];
+  while (!s.done) { order.push(s.current().id); s.flip(); s.grade(s.current().id, result); s.next(); }
+  return order;
+};
+const syncCode = (fn) => { try { fn(); return null; } catch (e) { return e.code; } };
+
+const order1 = playAll(startQuiz(MOCK_POINTS, { random: lcg(7), progress: {} }));
+ok('study 队列=12 张全排列', order1.length === 12 && [...order1].sort().join() === MOCK_POINTS.map((p) => p.id).sort().join());
+ok('打乱不 mutate 源 points', MOCK_POINTS.map((p) => p.id).join() === 'p01,p02,p03,p04,p05,p06,p07,p08,p09,p10,p11,p12');
+ok('同 seed 同序（random 可注入）', playAll(startQuiz(MOCK_POINTS, { random: lcg(7), progress: {} })).join() === order1.join());
+ok('异 seed 异序', playAll(startQuiz(MOCK_POINTS, { random: lcg(99), progress: {} })).join() !== order1.join());
+ok('current() 与源 point 同引用', MOCK_POINTS.includes(startQuiz(MOCK_POINTS, { progress: {} }).current()));
+
+const one = () => startQuiz([MOCK_POINTS[0]], { progress: {} });
+ok('未翻面评分 → E_NOT_FLIPPED', syncCode(() => one().grade('p01', 'remembered')) === 'E_NOT_FLIPPED');
+ok('非法 result → E_INVALID_PAYLOAD', syncCode(() => { const s = one(); s.flip(); s.grade('p01', 'x'); }) === 'E_INVALID_PAYLOAD');
+ok('cardId 非当前卡 → E_INVALID_PAYLOAD', syncCode(() => { const s = one(); s.flip(); s.grade('p02', 'remembered'); }) === 'E_INVALID_PAYLOAD');
+ok('同卡重复 grade → E_INVALID_PAYLOAD', syncCode(() => { const s = one(); s.flip(); s.grade('p01', 'remembered'); s.grade('p01', 'remembered'); }) === 'E_INVALID_PAYLOAD');
+ok('next 可跳过未评分卡', (() => { const s = one(); s.next(); return s.index === 1 && s.round.answered === 0 && s.done === true; })());
+const doneS = one(); doneS.flip(); doneS.grade('p01', 'remembered'); doneS.next();
+ok('done 后评分 → E_INVALID_PAYLOAD', syncCode(() => doneS.grade('p01', 'remembered')) === 'E_INVALID_PAYLOAD');
+doneS.flip(); doneS.next();
+ok('done 后 flip/next no-op', doneS.flipped === false && doneS.index === 1);
+
+storage.clearAll();
+const a = startQuiz([MOCK_POINTS[0]]); a.flip();
+const ra = a.grade('p01', 'forgot'); a.next();
+ok('没记住：streak0/inBook/attempts1/correct0', ra.entry.streak === 0 && ra.entry.mastered === false && ra.entry.inBook === true && ra.entry.attempts === 1 && ra.entry.correct === 0 && ra.removed === false);
+const b = startQuiz([MOCK_POINTS[0]]); b.flip();
+const rb = b.grade('p01', 'remembered'); b.next();
+ok('答对1：streak1 仍在错题本', rb.entry.streak === 1 && rb.entry.mastered === false && rb.entry.inBook === true && rb.entry.attempts === 2 && rb.entry.correct === 1 && rb.removed === false);
+const c = startQuiz([MOCK_POINTS[0]]); c.flip();
+const rc = c.grade('p01', 'remembered'); c.next();
+ok('答错→答对→答对→移出（joint test）', rc.entry.streak === 2 && rc.entry.mastered === true && rc.entry.inBook === false && rc.removed === true && c.done === true && getBook(MOCK_POINTS).length === 0);
+ok('grade 即持久化 ProgressMap', JSON.stringify(storage.loadProgress().p01) === JSON.stringify(rc.entry));
+const d = startQuiz([MOCK_POINTS[0]]); d.flip();
+const rd = d.grade('p01', 'remembered'); d.next();
+ok('streak 封顶 2', rd.entry.streak === 2 && rd.entry.attempts === 4 && rd.entry.correct === 3);
+
+storage.clearAll();
+const s3 = startQuiz(MOCK_POINTS.slice(0, 3), { progress: {} });
+ok('本轮 round.accuracy 缺省 null', s3.round.accuracy === null);
+for (const r of ['remembered', 'forgot', 'remembered']) { s3.flip(); s3.grade(s3.current().id, r); s3.next(); }
+ok('本轮计数/正确率分母=已作答数/done 终态', s3.round.answered === 3 && s3.round.correct === 2 && s3.round.accuracy === 2 / 3 && s3.done === true && s3.current() === null && s3.progress.current === 3 && s3.progress.total === 3);
+const s2 = startQuiz(MOCK_POINTS.slice(0, 2), { progress: {} });
+let qn = 0;
+const qUnsub = s2.subscribe(() => { qn++; });
+s2.flip(); s2.grade(s2.current().id, 'remembered');
+ok('flip/grade 均通知订阅', qn === 2);
+qUnsub(); s2.flip();
+ok('quiz unsubscribe 后不再通知', qn === 2);
+
+storage.clearAll();
+const seed = {
+  p01: { streak: 2, mastered: true, inBook: false, attempts: 2, correct: 2 },
+  p02: { streak: 1, mastered: false, inBook: true, attempts: 1, correct: 1 },
+  p05: { streak: 0, mastered: false, inBook: true, attempts: 1, correct: 0 },
+};
+const bs = startQuiz(MOCK_POINTS, { mode: 'battle', progress: seed });
+const bOrder = playAll(bs);
+ok('battle 快照一轮制：仅 inBook、队列固定、移出计数', bs.total === 2 && [...bOrder].sort().join() === 'p02,p05' && bs.round.removed === 1 && bs.mode === 'battle');
+ok('session.stats 全局口径（结果页环图）', bs.stats.bookCount === 1 && bs.stats.mastered === 2 && bs.stats.answered === 6 && bs.pointCount === 12);
+ok('entry 快照互不影响 / map / book 活视图', (() => { const e = bs.entry('p05'); e.streak = 99; return bs.entry('p05').streak === 1 && Object.keys(bs.map()).length === 3 && bs.book().map((p) => p.id).join() === 'p05'; })());
+ok('battle 空错题本 → E_EMPTY_POINTS', syncCode(() => startQuiz(MOCK_POINTS, { mode: 'battle', progress: {} })) === 'E_EMPTY_POINTS');
+ok('非法 mode → E_INVALID_PAYLOAD', syncCode(() => startQuiz(MOCK_POINTS, { mode: 'x' })) === 'E_INVALID_PAYLOAD');
+ok('空/非数组 points → E_EMPTY_POINTS', syncCode(() => startQuiz([])) === 'E_EMPTY_POINTS' && syncCode(() => startQuiz(null)) === 'E_EMPTY_POINTS');
+
+const st = getStats(MOCK_POINTS, { ...seed, p99: { streak: 2, mastered: true, inBook: false, attempts: 5, correct: 5 } });
+ok('getStats 限定当前 points、分母=Σattempts', st.attempts === undefined && st.answered === 4 && st.correct === 3 && st.accuracy === 3 / 4 && st.mastered === 1 && st.bookCount === 2);
+ok('getStats 0 作答 → accuracy null', getStats(MOCK_POINTS, {}).accuracy === null && getStats(MOCK_POINTS, {}).answered === 0);
+ok('getBook = inBook 过滤', getBook(MOCK_POINTS, seed).map((p) => p.id).join() === 'p02,p05');
+const nz = startQuiz([MOCK_POINTS[0]], { progress: { p01: { streak: 'x', attempts: -3, correct: 99, mastered: 'yes', inBook: 1 } } });
+nz.flip();
+const rz = nz.grade('p01', 'remembered');
+ok('损坏 entry 归一化按缺省', rz.entry.streak === 1 && rz.entry.attempts === 1 && rz.entry.correct === 1 && rz.entry.mastered === false && rz.entry.inBook === false);
+
+storage.clearAll();
+storage.saveProgress({ p01: { streak: 1, mastered: false, inBook: true, attempts: 1, correct: 1 } });
+storage.saveDeck(mockDeck());
+ok('同 deckId saveDeck 保留进度', storage.loadProgress().p01?.streak === 1);
+storage.saveDeck({ ...mockDeck(), deckId: 'd-other' });
+ok('换 deckId saveDeck 自动清零进度（D030）', JSON.stringify(storage.loadProgress()) === '{}');
+ok('E_NOT_FLIPPED 中文文案', /[一-龥]/.test(new ContractError('E_NOT_FLIPPED').message));
+
 console.log(`contract-check: ${pass} pass / ${fail} fail`);
 process.exit(fail ? 1 : 0);

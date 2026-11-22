@@ -40,6 +40,7 @@
 import { extractPoints, requestPoints, ContractError } from '../js/api.js';
 import * as storage from '../js/storage.js';
 import { mockDeck, MOCK_POINTS } from '../data/mock-points.js';
+import { startQuiz, getBook, getStats } from '../js/quiz.js';
 
 const mockMode = new URLSearchParams(location.search).get('mock') === '1';
 document.getElementById('mode').textContent = mockMode ? '当前：?mock=1（mock 断言）' : '当前：非 mock（真实链路断言，fetch-stub）';
@@ -130,6 +131,63 @@ await check('service_not_configured 映射（供 extractPoints 降级）', async
   try { await expectCode(requestPoints({ kind: 'text', text: 't', fileName: 'f' }, 'pdf-text'), 'E_SERVICE_NOT_CONFIGURED'); }
   finally { globalThis.fetch = realFetch; }
 });
+
+// ---- 模式无关：第六步 quiz 状态机（v1.4，D030）----
+storage.clearAll();
+const playAll = (s, result = 'remembered') => { const order = []; while (!s.done) { order.push(s.current().id); s.flip(); s.grade(s.current().id, result); s.next(); } return order; };
+const codeSync = (fn) => { try { fn(); return null; } catch (e) { return e.code; } };
+await check('quiz：打乱=全排列 + 不改源 points 原序', () => {
+  const order = playAll(startQuiz(MOCK_POINTS, { progress: {} }));
+  assert(order.length === 12 && [...order].sort().join() === MOCK_POINTS.map(p => p.id).sort().join(), '全排列');
+  assert(MOCK_POINTS.map(p => p.id).join() === 'p01,p02,p03,p04,p05,p06,p07,p08,p09,p10,p11,p12', '源序');
+});
+await check('quiz：未翻面 grade E_NOT_FLIPPED + 非法 result E_INVALID_PAYLOAD', () => {
+  const s = startQuiz(MOCK_POINTS, { progress: {} });
+  assert(codeSync(() => s.grade(s.current().id, 'remembered')) === 'E_NOT_FLIPPED');
+  s.flip();
+  assert(codeSync(() => s.grade(s.current().id, 'x')) === 'E_INVALID_PAYLOAD');
+});
+await check('quiz：joint test 答错→答对→答对→移出（跨轮）', () => {
+  storage.clearAll();
+  let last = null;
+  for (const r of ['forgot', 'remembered', 'remembered']) { const s = startQuiz([MOCK_POINTS[0]]); s.flip(); last = s.grade('p01', r); s.next(); assert(s.done, '单卡轮末 done'); }
+  assert(last.entry.streak === 2 && last.entry.mastered === true && last.entry.inBook === false && last.removed === true, '移出');
+  assert(getBook(MOCK_POINTS).length === 0, '书空');
+});
+await check('quiz：grade 即 saveProgress 持久化', () => {
+  assert(JSON.stringify(storage.loadProgress().p01) === JSON.stringify({ streak: 2, mastered: true, inBook: false, attempts: 3, correct: 2 }), 'p01 entry');
+});
+await check('quiz：battle 快照一轮制 + stats 全局口径', () => {
+  const seed = { p02: { streak: 1, mastered: false, inBook: true, attempts: 1, correct: 1 }, p05: { streak: 0, mastered: false, inBook: true, attempts: 1, correct: 0 } };
+  const s = startQuiz(MOCK_POINTS, { mode: 'battle', progress: seed });
+  assert(s.total === 2 && s.pointCount === 12, '快照');
+  const order = playAll(s);
+  assert([...order].sort().join() === 'p02,p05' && s.round.removed === 1, '一轮移出');
+  assert(s.stats.bookCount === 1 && s.stats.mastered === 1 && s.stats.answered === 4, '全局 stats');
+});
+await check('quiz：round/stats 正确率分母=已作答数', () => {
+  const s = startQuiz(MOCK_POINTS.slice(0, 3), { progress: {} });
+  assert(s.round.accuracy === null && getStats(MOCK_POINTS, {}).accuracy === null, 'null');
+  for (const r of ['remembered', 'forgot', 'remembered']) { s.flip(); s.grade(s.current().id, r); s.next(); }
+  assert(s.round.answered === 3 && s.round.accuracy === 2 / 3 && s.stats.answered === 3 && s.stats.accuracy === 2 / 3, '2/3');
+});
+await check('quiz：saveDeck 同 deckId 保留 / 换 deck 清零进度', () => {
+  storage.clearAll();
+  storage.saveProgress({ p01: { streak: 1, mastered: false, inBook: true, attempts: 1, correct: 1 } });
+  storage.saveDeck(mockDeck());
+  assert(storage.loadProgress().p01?.streak === 1, '保留');
+  storage.saveDeck({ ...mockDeck(), deckId: 'd-other' });
+  assert(JSON.stringify(storage.loadProgress()) === '{}', '清零');
+});
+await check('quiz：空 points/空战书 E_EMPTY_POINTS + 损坏 entry 归一化', () => {
+  assert(codeSync(() => startQuiz([])) === 'E_EMPTY_POINTS');
+  assert(codeSync(() => startQuiz(MOCK_POINTS, { mode: 'battle', progress: {} })) === 'E_EMPTY_POINTS');
+  const s = startQuiz([MOCK_POINTS[0]], { progress: { p01: { streak: 'x', attempts: -3, correct: 99 } } });
+  s.flip();
+  const r = s.grade('p01', 'remembered');
+  assert(r.entry.streak === 1 && r.entry.attempts === 1 && r.entry.correct === 1, '归一化');
+});
+storage.clearAll();
 
 if (mockMode) {
   await check('extractPoints(png) 返回 12 条 mock，sourceType/deckId/warnings 符合契约', async () => {
