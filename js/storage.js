@@ -56,7 +56,10 @@ export function loadDeck() {
 }
 
 export function saveDeck(deck) {
+  const prev = loadDeck();
   write(KEYS.deck, deck);
+  // 换 deck 自动清零进度（D030）：id 按序生成会跨 deck 复用，不清零会串卡；同 deckId 编辑/删除/撤销不受影响。
+  if (prev && prev.deckId !== deck.deckId) write(KEYS.progress, {});
 }
 
 export function loadProgress() {

@@ -14,10 +14,11 @@
 
 ## M2 — 闪卡自测 + 错题本 + 统计
 - 3D 翻转卡（**560ms**，D027 覆盖 DESIGN §5.2 520ms、翻面前禁自评、reduced-motion 退化）— B（第五步）
-- 第五步（M2 首切片，v1.3/D027）：A js/deck.js 状态机 + loadDeck 形状校验 + 契约（feat/m2-deck-A，PR 待 B review）；B js/deck-view.js + css/cards.css（PR 待提，A review）
-- 自评状态机 + ProgressMap 持久化（CONTRACT §1）— A
-- 错题本视图（inBook 过滤、连对 2 次移出、半掌握 1/2 徽标）— B
-- 统计页（正确率环图 + 已掌握数，直接数值标签）— B
+- 第五步（M2 首切片，v1.3/D027/D028）：已闭环 —— A PR #8 + B PR #9 均 squash 合并（main 88758af）。
+- 第六步（M2 自测切片，v1.4/D030）：A js/quiz.js 状态机 + saveDeck 换 deck 清零 + CONTRACT v1.4（feat/m2-quiz-A，PR 待 B review）；B js/quiz-view.js + css/quiz.css + **index.html 接线** + dev/quiz-test.html（PR #10 提案 v0.1 待收敛 rebase，A review）；双方共测「答错→答对→答对→移出」。
+- 自评状态机 + ProgressMap 持久化（CONTRACT §1）— A（第六步）
+- 错题本视图（inBook 过滤、连对 2 次移出、半掌握 1/2 徽标）— B（第六步）
+- 统计页（正确率环图 + 已掌握数，直接数值标签）— B（**并入结果页**，D030 裁决③，第六步）
 
 ## M3 — Function + Secret + 部署
 - functions/ Edge Function：/extract 文本与视觉两通道，Secret 读 APP_API_KEY，未配返回 service_not_configured — A
@@ -34,6 +35,7 @@
 ## 当前状态（2026-11-21）
 - M1 全闭环：PR #1–#4 均 squash 合并。第四步 A 侧 PR #6 已 squash 合并（main = 2c35adc，含 D023–D026；B 正式 APPROVE 5995379539，用户批准 D026①）。
 - 第四步 B 侧 PR #7 已 squash 合并（main = 9037518；A APPROVE；step4 合并环闭环 D026）。B 侧实测证据 verify/step4-runtime-evidence.md（测试站 9/9 等，仓库外）。
-- 第五步进行中：A feat/m2-deck-A（deck.js + loadDeck 形状校验 + CONTRACT v1.3 + D027 + 自检 58）PR 待 B review；B deck-view.js + cards.css 待提 PR（560ms、D018 误引收敛、DESIGN 同步）。
+- 第五步已闭环：A PR #8 + B PR #9 均 squash 合并（main = 88758af；D027/D028/D029）。
+- 第六步进行中：A feat/m2-quiz-A（quiz.js + saveDeck 换 deck 清零 + CONTRACT v1.4 + D030 + 自检 92）PR 待 B review；B PR #10（feat/step6-quiz-B @ e67b337，quiz-view/quiz.css/DESIGN §5.8/dev quiz-test stub 16/16）提案 v0.1 待 A v1.4 收敛 rebase（含 index.html 接线、真 quiz.js 复测）；合并环后共测「答错→答对→答对→移出」。
 - 部署/密钥：APP_API_KEY 已由 Owner 录入并 synced，descriptor 已写、canPublish=true。**官方站点 published=false / hasPublishedContent=false / private（2026-11-20 复核），从未发布**；B 的 9/9 实测在其自建测试站（siteId 01a1f442-2db5-7717-8bfc-0f51984ce1f7 / course-cards-k1u1a0c18dv.qoder.zone，public 仅供实测、非官方上线，D025）；官方首次发布 = M3（≤11-27、M2 完成 + #6/#7 合并后从 main）+ B 补测官方站 9/9 更新证据；**发布执行 = Owner/A（用户 11-20 裁决 D026），B 仅补测、不授权管理官方站**。录密钥前真实请求自动降级 mock。
-- 在册承诺：M2 剩余 = 自评状态机/ProgressMap/错题本/统计（loadDeck 形状校验已随第五步 A）；M4 删除动画（D016）；warnings 披露 UI 随 M3（PR #4 备注 1）。
+- 在册承诺：M2 剩余 = 第六步合并环（#11/#10 + 共测），合并后 M2 完成进 M3 门控；M4 删除动画（D016）；warnings 披露 UI 随 M3（PR #4 备注 1）。
