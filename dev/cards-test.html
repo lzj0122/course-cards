@@ -18,7 +18,7 @@
 </head>
 <body>
 <h1>B 侧验收：3D 翻转 / 键盘 / 降级 / 375px（dev 页，非产品 UI）</h1>
-<p class="note">D028：B 先实现视图层，接口经 A PR #8 发布 CONTRACT v1.3 确认（B 提案 v0.1 收敛至 v1.3：current()/progress/末张循环、无 done 终态；#card-next-btn/#card-progress）。本页 stub createDeck 仅 dev 用、非产品代码；视图零 storage 写入。560ms 依 D028 修订（DESIGN 原 520ms）。reduced-motion 以 CSSOM 断言（浏览器无法模拟 OS 偏好，如实披露）。</p>
+<p class="note">D028：B 先实现视图层，接口经 A PR #8 发布 CONTRACT v1.3 确认（B 提案 v0.1 收敛至 v1.3：current()/progress/末张循环、无 done 终态；#card-next-btn/#card-progress）。本页 stub createDeck 仅 dev 用、非产品代码；视图零 storage 写入。560ms 依 D028 修订（DESIGN 原 520ms）。reduced-motion 以 CSSOM 断言（浏览器无法模拟 OS 偏好，如实披露）；无头/隐藏 tab 过渡冻结以 getAnimations().finish() 落定（#9 遗留／#10 评审收敛）。</p>
 <ol id="results"></ol>
 <p id="summary">运行中…</p>
 <div id="card-stage"></div>
@@ -52,6 +52,8 @@ const PTS = [
 
 const results = [];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/* 无头/隐藏 tab 过渡冻结落定：有限动画/过渡强制 finish（#9/#10 评审非阻塞收敛） */
+const settle = (doc = document) => { for (const a of doc.getAnimations({ subtree: true })) { try { a.finish(); } catch { /* 无限动画不可 finish */ } } };
 async function check(name, fn) {
   try { await fn(); results.push([true, name]); }
   catch (e) { results.push([false, `${name} → ${e && e.message}`]); }
@@ -85,6 +87,7 @@ await check('翻转时长 560ms（D028）', async () => {
 await check('点击翻面：class/aria/rotateY', async () => {
   stage.querySelector('#flip-card').click();
   await sleep(700); // 等 560ms 过渡落定再取终态矩阵
+  settle(); // 无头/隐藏 tab 冻结兜底
   const card = stage.querySelector('#flip-card');
   assert(card.classList.contains('flipped') && card.getAttribute('aria-pressed') === 'true', 'flipped');
   assert(getComputedStyle(card).transform.startsWith('matrix3d(-1'), 'rotateY');
@@ -157,6 +160,7 @@ const widthCheck = async (w, large) => {
   f.style.width = w + 'px';
   f.contentDocument.documentElement.classList.toggle('large-text', large);
   await sleep(120);
+  settle(f.contentDocument);
   const de = f.contentDocument.documentElement;
   assert(de.scrollWidth <= de.clientWidth, `${w}px large=${large} sw=${de.scrollWidth}`);
   return f.contentDocument.querySelector('#flip-card').getBoundingClientRect().height;

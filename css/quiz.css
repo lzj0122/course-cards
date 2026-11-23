@@ -1,0 +1,108 @@
+/* ============================================================
+   css/quiz.css — M2 step-6 自测/结果/错题本/消灭战（B 侧，DESIGN §5.8 / D031）
+   翻面卡复用 cards.css（§5.2 560ms）；本文件只加自评/滑出/结果/错题本样式
+   变量复用 list.css :root；独立加载时走 fallback（dev 验收页隔离）
+   ============================================================ */
+
+.quiz-stage { display: flex; flex-direction: column; gap: var(--space-4, 16px); }
+
+/* 自评双钮（§1.2/§1.4：acid 实底 ink-900 字 / coral 实底白字；≥52px，大字 64px） */
+.quiz-rate { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3, 12px); }
+.rate-btn {
+  height: 52px; border: none; border-radius: var(--radius-md, 14px);
+  font-size: var(--text-base, 1rem); font-family: inherit; cursor: pointer;
+  min-width: 0;
+}
+#rate-remembered { background: var(--acid-500, #84CC16); color: var(--ink-900, #1B1F3B); }
+#rate-forgot { background: var(--coral-500, #F43F5E); color: #fff; }
+.rate-btn:disabled { opacity: .3; cursor: not-allowed; }
+html.large-text .rate-btn { height: 64px; }
+.rate-hint { text-align: center; font-size: var(--text-sm, .875rem); color: var(--ink-700, #2E3560); }
+
+/* 自评后滑出 240ms（§5.2）：translate 独立属性，避免覆盖 rotateY 翻面变换；描边一闪 */
+.card.out-left { animation: quiz-out-left 240ms cubic-bezier(.2, .7, .2, 1) forwards; }
+.card.out-right { animation: quiz-out-right 240ms cubic-bezier(.2, .7, .2, 1) forwards; }
+@keyframes quiz-out-left { to { translate: -24px 0; opacity: 0; } }
+@keyframes quiz-out-right { to { translate: 24px 0; opacity: 0; } }
+.card.out-left .card-face { box-shadow: 0 0 0 3px var(--coral-500, #F43F5E), var(--shadow-2, 0 8px 24px rgba(27, 31, 59, .14)); }
+.card.out-right .card-face { box-shadow: 0 0 0 3px var(--acid-500, #84CC16), var(--shadow-2, 0 8px 24px rgba(27, 31, 59, .14)); }
+
+/* 状态徽标（§5.5：圆角 full、text-sm、不只靠颜色） */
+.badge { font-size: var(--text-sm, .875rem); padding: 2px 10px; border-radius: var(--radius-full, 999px); white-space: nowrap; }
+.badge-new { background: var(--indigo-100, #E4E4FB); color: var(--indigo-600, #4338CA); }
+.badge-half { background: var(--amber-100, #FEF3C7); color: var(--ink-900, #1B1F3B); }
+.badge-mastered { background: var(--acid-100, #ECFCCB); color: var(--ink-900, #1B1F3B); }
+.badge-book { background: var(--coral-100, #FFE4E6); color: var(--coral-500, #F43F5E); }
+
+/* 结果页 */
+.quiz-result { display: flex; flex-direction: column; gap: var(--space-4, 16px); }
+.result-title { margin: 0; font-size: var(--text-xl, 1.375rem); color: var(--ink-900, #1B1F3B); }
+.result-ring { width: 160px; height: 160px; margin: 0 auto; }
+.result-ring svg { width: 100%; height: 100%; display: block; }
+.ring-num { font-family: var(--font-mono, ui-monospace, Consolas, monospace); font-size: 24px; fill: var(--ink-900, #1B1F3B); }
+.ring-label { font-size: 12px; fill: var(--ink-700, #2E3560); }
+.ring-legend { display: flex; justify-content: center; gap: var(--space-2, 8px); flex-wrap: wrap; }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+.result-stats { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3, 12px); }
+.stat-box { background: var(--surface, #FFFFFF); border-radius: var(--radius-md, 14px); padding: var(--space-4, 16px); text-align: center; box-shadow: var(--shadow-1, 0 1px 3px rgba(27, 31, 59, .08)); }
+.stat-num { font-family: var(--font-mono, ui-monospace, Consolas, monospace); font-size: var(--text-3xl, 2.25rem); line-height: 1.3; color: var(--ink-900, #1B1F3B); }
+.stat-label { font-size: var(--text-sm, .875rem); color: var(--ink-700, #2E3560); }
+
+/* 错题本 */
+.quiz-book h3 { margin: 0 0 var(--space-3, 12px); font-size: var(--text-lg, 1.125rem); color: var(--ink-900, #1B1F3B); }
+#mistake-book { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-3, 12px); }
+.book-row { display: flex; align-items: center; gap: var(--space-3, 12px); background: var(--surface, #FFFFFF); border-radius: var(--radius-md, 14px); padding: var(--space-3, 12px) var(--space-4, 16px); box-shadow: var(--shadow-1, 0 1px 3px rgba(27, 31, 59, .08)); }
+.book-q { font-size: var(--text-base, 1rem); color: var(--ink-900, #1B1F3B); overflow-wrap: anywhere; }
+.book-empty { text-align: center; padding: var(--space-5, 24px) var(--space-4, 16px); color: var(--ink-700, #2E3560); }
+.book-empty svg { width: 120px; height: 120px; }
+.book-empty h4 { margin: var(--space-3, 12px) 0 var(--space-2, 8px); color: var(--ink-900, #1B1F3B); font-size: var(--text-lg, 1.125rem); }
+.book-empty p { margin: 0; font-size: var(--text-base, 1rem); }
+
+/* 消灭战 / 再测一轮 */
+.quiz-actions { display: grid; gap: var(--space-3, 12px); }
+#battle-btn, #quiz-restart-btn {
+  height: 52px; border-radius: var(--radius-md, 14px);
+  font-size: var(--text-base, 1rem); font-family: inherit; cursor: pointer;
+}
+#battle-btn { border: none; background: var(--indigo-600, #4338CA); color: #fff; }
+#battle-btn:disabled { opacity: .3; cursor: not-allowed; }
+#quiz-restart-btn { border: 2px solid var(--indigo-600, #4338CA); background: transparent; color: var(--indigo-600, #4338CA); }
+html.large-text #battle-btn, html.large-text #quiz-restart-btn { height: 64px; }
+
+.rate-btn:focus-visible, #battle-btn:focus-visible, #quiz-restart-btn:focus-visible { outline: 2px solid var(--indigo-500, #6366F1); outline-offset: 2px; }
+
+/* prefers-reduced-motion：滑出退化 150ms 淡出（翻面退化在 cards.css） */
+@media (prefers-reduced-motion: reduce) {
+  .card.out-left, .card.out-right { animation: none; opacity: 0; transition: opacity 150ms linear; }
+}
+
+/* ---------- 产品接线（本步含，D030①／D031；index.html 归 B） ---------- */
+/* 底部吸附栏双入口：生成闪卡（deck 接线仍门控）+ 开始自测（本步激活） */
+.bottom-bar { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3, 12px); }
+.bottom-bar > button { max-width: none; }
+#start-quiz-btn {
+  display: block; width: 100%;
+  background: var(--acid-500, #84CC16); color: var(--ink-900, #1B1F3B);
+  border: none; border-radius: var(--radius-md, 14px);
+  min-height: 52px; padding: var(--space-3, 12px) var(--space-4, 16px);
+  font-family: inherit; font-size: var(--text-lg, 1.125rem); font-weight: 800; letter-spacing: .06em;
+  cursor: pointer; box-shadow: var(--shadow-2, 0 8px 24px rgba(27, 31, 59, .14));
+  transition: background .15s, transform .08s, box-shadow .15s;
+}
+#start-quiz-btn:hover { background: var(--acid-400, #A3E635); transform: translateY(-1px); }
+#start-quiz-btn:active { transform: translateY(1px); box-shadow: var(--shadow-1, 0 1px 3px rgba(27, 31, 59, .08)); }
+html.large-text #start-quiz-btn { min-height: 64px; }
+
+/* 自测区（清单视图互斥切换，list.js 接线） */
+.quiz-section { margin-top: var(--space-6, 24px); display: flex; flex-direction: column; gap: var(--space-4, 16px); }
+.quiz-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3, 12px); }
+.quiz-head h2 { margin: 0; font-size: var(--text-xl, 1.375rem); color: var(--ink-900, #1B1F3B); }
+#quiz-back-btn {
+  height: 40px; padding: 0 var(--space-4, 16px);
+  border: 2px solid var(--indigo-600, #4338CA); border-radius: var(--radius-md, 14px);
+  background: transparent; color: var(--indigo-600, #4338CA);
+  font-family: inherit; font-size: var(--text-base, 1rem); cursor: pointer;
+}
+html.large-text #quiz-back-btn { height: 48px; }
+#start-quiz-btn:focus-visible, #quiz-back-btn:focus-visible { outline: 2px solid var(--indigo-500, #6366F1); outline-offset: 2px; }
