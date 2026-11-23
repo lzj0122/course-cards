@@ -2,8 +2,12 @@
 // 契约：CONTRACT.md v1.1 §2/§3/§5/§6；视觉：DESIGN.md v1.0
 // 边界（D013）：不改 js/api.js / js/storage.js / data/mock-points.js；提取统一经 extractPoints（M1 mock-first）。
 // 持久化（D018）：saveDeck/loadDeck 提前到 step 4 接通；clearAll 验收走 dev/list-test.html，产品 UI 不加入口。
+// 自测接线（D030①／D031，第六步本步含）：#start-quiz-btn → startQuiz(working) → renderQuiz；
+//   quiz-battle → startQuiz(working,{mode:'battle'})（快照一轮制）；quiz-restart → 重洗；#quiz-back-btn 回清单。
 import { extractPoints, ContractError } from './api.js';
 import { loadDeck, saveDeck, loadPrefs, savePrefs } from './storage.js'; // 契约 §2 只调用不修改；deck 持久化 D018
+import { startQuiz } from './quiz.js';           // A 状态层（v1.4）；视图零 storage 写入，持久化归 quiz.js
+import { renderQuiz } from './quiz-view.js';     // B 视图层（v1.4 收敛）
 
 const $ = (id) => document.getElementById(id);
 const root = $('point-list');
@@ -24,6 +28,12 @@ const selectAll = $('select-all');
 const generateBtn = $('generate-deck-btn');
 const toastRegion = $('toast-region');
 const aaToggle = $('large-text-toggle');
+const heroSection = document.querySelector('.hero');
+const bottomBar = document.querySelector('.bottom-bar');
+const quizSection = $('quiz-section');
+const quizStage = $('quiz-stage');
+const startQuizBtn = $('start-quiz-btn');
+const quizBackBtn = $('quiz-back-btn');
 
 const mockMode = new URLSearchParams(location.search).get('mock') === '1';
 
@@ -382,10 +392,38 @@ aaToggle.addEventListener('click', () => {
   }
 });
 
-/* ---------------- 生成闪卡（M2 开放） ---------------- */
+/* ---------------- 生成闪卡（deck 浏览接线仍门控，集成步另行授权） ---------------- */
 generateBtn.addEventListener('click', () => {
-  toast(`闪卡自测将在 M2 开放${selected.size ? `（已选 ${selected.size} 个考点）` : ''}，当前为清单预览。`, 'info');
+  toast(`闪卡浏览将在集成步开放${selected.size ? `（已选 ${selected.size} 个考点）` : ''}；自测请用底部「开始自测」。`, 'info');
 });
+
+/* ---------------- 自测接线（D030①／D031；契约 v1.4 §2 接线条） ----------------
+   清单 ↔ 自测互斥切换；空书消灭战由视图 disabled 门控，产品路径不触 E_EMPTY_POINTS。 */
+function enterQuiz(mode = 'study') {
+  if (working.length === 0) { toast('清单还是空的，先提取考点再开始自测。', 'info'); return; }
+  let session;
+  try {
+    session = startQuiz(working, mode === 'battle' ? { mode: 'battle' } : {});
+  } catch (err) {
+    toast(err instanceof ContractError ? err.message : '自测启动失败，请重试。', 'error');
+    return;
+  }
+  heroSection.hidden = true;
+  listSection.hidden = true;
+  bottomBar.hidden = true;
+  quizSection.hidden = false;
+  renderQuiz(session, quizStage);
+}
+function exitQuiz() {
+  quizSection.hidden = true;
+  heroSection.hidden = false;
+  bottomBar.hidden = false;
+  setState(working.length ? 'success' : 'empty');
+}
+startQuizBtn.addEventListener('click', () => enterQuiz('study'));
+quizBackBtn.addEventListener('click', exitQuiz);
+quizStage.addEventListener('quiz-battle', () => enterQuiz('battle'));
+quizStage.addEventListener('quiz-restart', () => enterQuiz('study'));
 
 /* ---------------- init ---------------- */
 const prefs = loadPrefs(); // 损坏 JSON 时 storage 内部缺省 + warn，不抛错（契约 §2）
